@@ -6,6 +6,7 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+// API ROUTES
 app.get('/api/hello', (req, res) => {
   res.json({ message: 'Hello from Express!' })
 })
