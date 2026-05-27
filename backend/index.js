@@ -7,13 +7,18 @@ app.use(cors())
 app.use(express.json())
 
 // API ROUTES
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'Backend is running ✓' })
+})
+
 app.get('/api/hello', (req, res) => {
   res.json({ message: 'Hello from Express!' })
 })
 
-app.get('/api/users', async (req, res) => {
-  const { rows } = await sql`SELECT * FROM users`
-  res.json(rows)
-})
+// app.get('/api/users', async (req, res) => {
+//  const { rows } = await sql`SELECT * FROM users`
+//  res.json(rows)
+// })
 
-app.listen(3000, () => console.log('Server running on port 3000'))
+const PORT = process.env.PORT || 5000
+app.listen(PORT, () => console.log('Server running on port 5000!'))
