@@ -18,6 +18,11 @@ app.use('/auth', authRouter);
 
 // API ROUTES
 
+// home route
+app.get('/', (req, res) => {
+  res.send('The Purrsuit API is working!!!');
+});
+
 // test route
 app.get('/api/hello', (req, res) => { 
   res.json({ message: 'Hello from Express!' })

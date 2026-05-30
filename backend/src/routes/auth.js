@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import passport from '../passport.js';
-import { signToken } from '../middleware.js';
+import { signToken, verifyToken } from '../middleware.js';
 
 const router = Router();
 const REDIRECT_URL = process.env.FRONTEND_URL; // after successful login, homepage will conditionally render
@@ -26,6 +26,19 @@ router.get('/google/callback',
     res.redirect(REDIRECT_URL);
   }
 );
+
+// get user info to confirm that user is logged in
+router.get('/me', (req, res) => {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).json({ loggedIn: false });
+
+  try {
+    const decoded = verifyToken(token);
+    res.status(200).json({ loggedIn: true, user: decoded });
+  } catch {
+    res.status(401).json({ loggedIn: false });
+  }
+});
 
 // upon logout, clear cookies
 router.post('/logout', (req, res) => {
