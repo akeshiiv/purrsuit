@@ -36,5 +36,15 @@ app.get('/api/coins', authenticate, async (req, res) => {
   }
 });
 
+// retrieve user's name
+app.get('/api/name', authenticate, async (req, res) => {
+  try {
+    const rows = await sql`SELECT name FROM users WHERE id = ${req.user.id}`;
+    res.json({ name: rows[0].name });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch name' });
+  }
+});
+
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`Server running on port ${PORT}!`))
