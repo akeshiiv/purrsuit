@@ -8,7 +8,7 @@ app.use(express.json())
 
 // API ROUTES
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'Backend is running ✓' })
+  res.json({ status: 'backend is running yipeee' })
 })
 
 app.get('/api/hello', (req, res) => {
@@ -18,7 +18,14 @@ app.get('/api/hello', (req, res) => {
 // app.get('/api/users', async (req, res) => {
 //  const { rows } = await sql`SELECT * FROM users`
 //  res.json(rows)
-// })
+// }) enxi u test this  it's database related 
+
+app.post("/api/coins", (req, res) => {
+  const { coins } = req.body.coins;
+  console.log({ coins });
+  res.json({ message: "coins rewarded!" })
+} 
+)
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log('Server running on port 5000!'))
