@@ -40,8 +40,13 @@ export default function Dashboard() {
           clearInterval(intervalId);
           setRunning(false);
           setCoins(prev => Number(prev) + coinsEarned);
-          // TODO: POST updated coins to /api/coins + update sessions DB
-          return TIMER_DURATION; // reset timer for next round
+          fetch(`${API_URL}/api/coins`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coinsEarned, duration: TIMER_DURATION }),
+          });
+          return TIMER_DURATION;
         }
         return sec - 1;
       });
