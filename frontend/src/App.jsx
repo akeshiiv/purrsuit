@@ -7,5 +7,5 @@ import Dashboard from './pages/Dashboard.jsx';
 
 export default function App() {
   const { loggedIn } = useAuth();
-  return loggedIn ? <Dashboard /> : <Login />;
+  return loggedIn ? <Dashboard/> : <Login/>;
 }

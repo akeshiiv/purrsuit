@@ -2,6 +2,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import 'dotenv/config';
 import express from 'express';
+import { sql } from './db.js';
 import { authenticate } from './src/middleware.js';
 import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
@@ -33,6 +34,23 @@ app.get('/api/coins', authenticate, async (req, res) => {
     res.json({ coins: rows[0].coins });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch coins' });
+  }
+});
+
+// update coins and log session
+app.post('/api/coins', authenticate, async (req, res) => {
+  try {
+    const { coinsEarned, duration } = req.body;
+    const rows = await sql`
+      UPDATE users SET coins = coins + ${coinsEarned} WHERE id = ${req.user.id} RETURNING coins
+    `;
+    await sql`
+      INSERT INTO sessions (user_id, duration, coins_earned)
+      VALUES (${req.user.id}, ${duration}, ${coinsEarned})
+    `;
+    res.json({ coins: rows[0].coins });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update coins' });
   }
 });
 

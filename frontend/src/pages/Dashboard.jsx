@@ -87,7 +87,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-3">
-          <button onClick={handleStartStop} className="px-6 py-2 border rounded hover:bg-gray-100">
+          <button onClick={handleStartStop} className="px-6 py-2 border rounded hover:bg-gray-200">
             {running ? 'Stop' : 'Start'}
           </button>
           <button onClick={logout} className="px-6 py-2 border rounded hover:bg-gray-100">
