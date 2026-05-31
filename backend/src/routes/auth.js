@@ -6,8 +6,8 @@ const router = Router();
 const REDIRECT_URL = process.env.FRONTEND_URL; // after successful login, homepage will conditionally render
 const LOGIN_DAYS = 7; // user will stay logged in for 7 days
 const cookieOptions = {
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',
+  secure: true,
+  sameSite: 'none',
   maxAge: LOGIN_DAYS * 24 * 60 * 60 * 1000,
 };
 
@@ -42,8 +42,18 @@ router.get('/me', (req, res) => {
 
 // upon logout, clear cookies
 router.post('/logout', (req, res) => {
-  res.clearCookie('token');
-  res.clearCookie('logged_in');
+  res.clearCookie('token', {
+    secure: true,
+    sameSite: 'none',
+    httpOnly: true,
+  });
+
+  res.clearCookie('logged_in', {
+    secure: true,
+    sameSite: 'none',
+    httpOnly: false,
+  });
+
   res.json({ success: true });
 });
 
