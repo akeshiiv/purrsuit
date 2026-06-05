@@ -3,7 +3,7 @@ import { useAuth } from '../components/AuthContext.jsx';
 import '../App.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
-const TIMER_DURATION = 60; // in seconds
+const TIMER_DURATION = 30; // in seconds
 const COINS_PER_SECOND = 2;
 
 export default function Dashboard() {
