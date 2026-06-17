@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthContext.jsx';
+import { apiFetch } from '../services/api.js';
 import '../App.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -40,9 +41,8 @@ export default function Dashboard() {
           clearInterval(intervalId);
           setRunning(false);
           setCoins(prev => Number(prev) + coinsEarned);
-          fetch(`${API_URL}/api/coins`, {
+          apiFetch('/api/coins', {
             method: 'POST',
-            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ duration: TIMER_DURATION }),
           });
