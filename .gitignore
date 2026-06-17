@@ -6,5 +6,7 @@ client/dist/
 npm-debug.log*
 .vscode/
 .idea/
+.obsidian/
 .DS_Store
 Thumbs.db
+to-do.md
