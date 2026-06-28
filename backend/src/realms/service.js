@@ -347,7 +347,33 @@ async function rollCurrentSeason(tx, current, now) {
   const newSeason = newSeasonRows[0];
   const members = await memberRowsForRealm(tx, current.realm_id);
 
-  // TODO(be-leaderboard-season): snapshot season_results before old cells are deleted and member economy is reset.
+  // Snapshot final standings before the ending season's cells are deleted and
+  // the member economy is reset below — the rows must reflect territory held and
+  // stats *at season end*. Ranked by territory with the same tiebreakers as the
+  // live leaderboard. ON CONFLICT keeps this idempotent alongside the
+  // status='active' rollover guard above.
+  await tx`
+    INSERT INTO season_results
+      (season_id, user_id, rank, territories, battles_won, seconds_studied, cells_a, cells_b, cells_c)
+    SELECT ${current.season_id},
+           rm.user_id,
+           ROW_NUMBER() OVER (
+             ORDER BY COUNT(c.id) DESC, rm.battles_won DESC, rm.seconds_studied DESC,
+                      rm.joined_at ASC, rm.id ASC
+           )::int,
+           COUNT(c.id)::int,
+           rm.battles_won,
+           rm.seconds_studied,
+           (COUNT(c.id) FILTER (WHERE c.unit_type = 'A'))::int,
+           (COUNT(c.id) FILTER (WHERE c.unit_type = 'B'))::int,
+           (COUNT(c.id) FILTER (WHERE c.unit_type = 'C'))::int
+    FROM realm_members rm
+    LEFT JOIN cells c ON c.owner_member_id = rm.id AND c.season_id = ${current.season_id}
+    WHERE rm.realm_id = ${current.realm_id}
+    GROUP BY rm.id, rm.user_id, rm.battles_won, rm.seconds_studied, rm.joined_at
+    ON CONFLICT (season_id, user_id) DO NOTHING
+  `;
+
   await tx`DELETE FROM cells WHERE season_id = ${current.season_id}`;
 
   const { cells, assignments } = assignMembersToGeneratedHomes({

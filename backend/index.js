@@ -13,6 +13,7 @@ import realmsRouter from './src/routes/realms.js';
 import shopRouter from './src/routes/shop.js';
 import studyRouter from './src/routes/study.js';
 import mapRouter from './src/routes/map.js';
+import seasonRouter from './src/routes/season.js';
 import { doubleCsrfProtection, generateCsrfToken } from './src/csrf.js';
 import { globalLimiter, authLimiter } from './src/rateLimit.js';
 
@@ -58,6 +59,7 @@ app.use('/api', realmsRouter);
 app.use('/api', shopRouter);
 app.use('/api', studyRouter);
 app.use('/api', mapRouter);
+app.use('/api', seasonRouter);
 
 // retrieve user's name
 app.get('/api/name', authenticate, async (req, res) => {
