@@ -12,8 +12,8 @@ function makeFakeClient() {
     get released() {
       return released;
     },
-    query(text) {
-      queries.push(text);
+    query(text, values) {
+      queries.push(values === undefined ? text : { text, values });
       return Promise.resolve({ rows: [] });
     },
     release() {
@@ -77,4 +77,18 @@ test('releases the client when fn throws', async () => {
   );
 
   assert.ok(client.released);
+});
+
+test('exposes a parameterized query helper for dynamic bulk SQL inside transactions', async () => {
+  const client = makeFakeClient();
+  _setTransactionPool(fakePoolReturning(client));
+
+  await withTransaction(async (tx) => {
+    await tx.query('INSERT INTO cells(x, y) VALUES ($1, $2)', [1, 2]);
+  });
+
+  assert.deepEqual(client.queries[1], {
+    text: 'INSERT INTO cells(x, y) VALUES ($1, $2)',
+    values: [1, 2],
+  });
 });

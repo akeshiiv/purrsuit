@@ -1,25 +1,28 @@
 // Authoritative coin-award rules. These constants live on the server so the
-// award can never be dictated by the client — the POST /api/coins handler
-// derives the award from the (validated) session duration alone and ignores
-// any `coinsEarned` sent in the request body.
+// award can never be dictated by the client — the POST /api/study/complete
+// handler derives the award from the (validated) session length alone and
+// ignores anything the client claims to have earned.
+//
+// Economy (per the API contract + PDF): coins earned = studied minutes × 4
+// (5 min → 20, 25 min → 100, 120 min → 480).
 
-export const COINS_PER_SECOND = 2;
-export const MIN_DURATION_SECONDS = 30; // shortest session that can earn coins
-export const MAX_DURATION_SECONDS = 2 * 60 * 60; // 2h guard against absurd claims
+export const COINS_PER_MINUTE = 4;
+export const MIN_DURATION_MINUTES = 5; // shortest session that can earn coins
+export const MAX_DURATION_MINUTES = 120; // longest a single session may claim
 
-// Validate a client-supplied session duration and compute the coin award.
-// Returns { ok: true, award } on success or { ok: false, error } otherwise.
-export function validateAndComputeAward(duration) {
-  if (!Number.isInteger(duration)) {
-    return { ok: false, error: 'duration must be an integer number of seconds' };
+// Validate a client-supplied study duration (whole minutes) and compute the
+// coin award. Returns { ok: true, award } on success or { ok: false, error }.
+export function validateAndComputeAward(durationMinutes) {
+  if (!Number.isInteger(durationMinutes)) {
+    return { ok: false, error: 'durationMinutes must be an integer number of minutes' };
   }
-  if (duration < MIN_DURATION_SECONDS || duration > MAX_DURATION_SECONDS) {
+  if (durationMinutes < MIN_DURATION_MINUTES || durationMinutes > MAX_DURATION_MINUTES) {
     return {
       ok: false,
-      error: `duration must be between ${MIN_DURATION_SECONDS} and ${MAX_DURATION_SECONDS} seconds`,
+      error: `durationMinutes must be between ${MIN_DURATION_MINUTES} and ${MAX_DURATION_MINUTES}`,
     };
   }
-  return { ok: true, award: duration * COINS_PER_SECOND };
+  return { ok: true, award: durationMinutes * COINS_PER_MINUTE };
 }
 
 // Coerce a coins value read from the DB into a safe integer. The `coins::int`

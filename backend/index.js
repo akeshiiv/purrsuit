@@ -6,10 +6,14 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { sql } from './db.js';
-import { validateAndComputeAward, parseCoins } from './src/coins.js';
 import { authenticate } from './src/middleware.js';
 import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
+import realmsRouter from './src/routes/realms.js';
+import shopRouter from './src/routes/shop.js';
+import studyRouter from './src/routes/study.js';
+import mapRouter from './src/routes/map.js';
+import seasonRouter from './src/routes/season.js';
 import profileRouter from './src/routes/profile.js';
 import { doubleCsrfProtection, generateCsrfToken } from './src/csrf.js';
 import { globalLimiter, authLimiter } from './src/rateLimit.js';
@@ -36,7 +40,6 @@ app.get('/api/csrf-token', (req, res) => {
 
 // ROUTERS
 app.use('/auth', authLimiter, authRouter);
-app.use('/api/profile', authenticate, profileRouter);
 
 // API ROUTES
 
@@ -53,39 +56,12 @@ app.get('/api/hello', (req, res) => {
 // get current user info
 app.get('/api/me', authenticate, (req, res) => res.json(req.user));
 
-// retrieve user coins
-app.get('/api/coins', authenticate, async (req, res) => {
-  try {
-    const rows = await sql`SELECT coins::int AS coins FROM users WHERE id = ${req.user.id}`;
-    res.json({ coins: parseCoins(rows[0]?.coins) });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch coins' });
-  }
-});
-
-// update coins and log session
-app.post('/api/coins', authenticate, async (req, res) => {
-  // The award is derived server-side from the validated duration. Any
-  // `coinsEarned` sent by the client is ignored so the balance cannot be forged.
-  const { duration } = req.body ?? {};
-  const result = validateAndComputeAward(duration);
-  if (!result.ok) {
-    return res.status(400).json({ error: result.error });
-  }
-  const { award } = result;
-  try {
-    const rows = await sql`
-      UPDATE users SET coins = coins + ${award} WHERE id = ${req.user.id} RETURNING coins::int AS coins
-    `;
-    await sql`
-      INSERT INTO sessions (user_id, duration, coins_earned)
-      VALUES (${req.user.id}, ${duration}, ${award})
-    `;
-    res.json({ coins: parseCoins(rows[0]?.coins) });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update coins' });
-  }
-});
+app.use('/api', realmsRouter);
+app.use('/api', shopRouter);
+app.use('/api', studyRouter);
+app.use('/api', mapRouter);
+app.use('/api', seasonRouter);
+app.use('/api', profileRouter);
 
 // retrieve user's name
 app.get('/api/name', authenticate, async (req, res) => {
@@ -101,7 +77,7 @@ app.get('/api/name', authenticate, async (req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   if (err?.code === 'EBADCSRFTOKEN') {
-    return res.status(403).json({ error: 'Invalid CSRF token' });
+    return res.status(403).json({ error: 'CSRF_INVALID', message: 'Invalid CSRF token' });
   }
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
