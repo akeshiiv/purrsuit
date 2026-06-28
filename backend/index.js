@@ -102,7 +102,7 @@ app.get('/api/name', authenticate, async (req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   if (err?.code === 'EBADCSRFTOKEN') {
-    return res.status(403).json({ error: 'Invalid CSRF token' });
+    return res.status(403).json({ error: 'CSRF_INVALID', message: 'Invalid CSRF token' });
   }
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
