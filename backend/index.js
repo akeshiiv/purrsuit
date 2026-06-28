@@ -6,7 +6,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { sql } from './db.js';
-import { validateAndComputeAward } from './src/coins.js';
+import { validateAndComputeAward, parseCoins } from './src/coins.js';
 import { authenticate } from './src/middleware.js';
 import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
@@ -54,8 +54,8 @@ app.get('/api/me', authenticate, (req, res) => res.json(req.user));
 // retrieve user coins
 app.get('/api/coins', authenticate, async (req, res) => {
   try {
-    const rows = await sql`SELECT coins FROM users WHERE id = ${req.user.id}`;
-    res.json({ coins: rows[0].coins });
+    const rows = await sql`SELECT coins::int AS coins FROM users WHERE id = ${req.user.id}`;
+    res.json({ coins: parseCoins(rows[0]?.coins) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch coins' });
   }
@@ -73,13 +73,13 @@ app.post('/api/coins', authenticate, async (req, res) => {
   const { award } = result;
   try {
     const rows = await sql`
-      UPDATE users SET coins = coins + ${award} WHERE id = ${req.user.id} RETURNING coins
+      UPDATE users SET coins = coins + ${award} WHERE id = ${req.user.id} RETURNING coins::int AS coins
     `;
     await sql`
       INSERT INTO sessions (user_id, duration, coins_earned)
       VALUES (${req.user.id}, ${duration}, ${award})
     `;
-    res.json({ coins: rows[0].coins });
+    res.json({ coins: parseCoins(rows[0]?.coins) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update coins' });
   }

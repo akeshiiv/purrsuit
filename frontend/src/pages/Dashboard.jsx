@@ -5,7 +5,6 @@ import '../App.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
 const TIMER_DURATION = 30; // in seconds
-const COINS_PER_SECOND = 2;
 
 export default function Dashboard() {
   const { logout } = useAuth();
@@ -13,15 +12,20 @@ export default function Dashboard() {
   const [running, setRunning] = useState(false);
   const [coins, setCoins] = useState(null);
   const [name, setName] = useState(null);
-  const coinsEarned = TIMER_DURATION * COINS_PER_SECOND;
+  const [coinError, setCoinError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/coins`, { credentials: 'include' })
-      .then((r) => r.json())
+    apiFetch('/api/coins')
+      .then((r) => {
+        if (!r.ok) throw new Error(`Request failed (${r.status})`);
+        return r.json();
+      })
       .then((data) => {
-        const parsed = Number(data.coins);
-        setCoins(isNaN(parsed) ? 0 : parsed); // TODO: figure out why backend returns NaN
-      });
+        if (typeof data.coins !== 'number') throw new Error('Invalid response');
+        setCoins(data.coins);
+      })
+      .catch(() => setCoinError('Could not load your coins.'));
   }, []);
 
   useEffect(() => {
@@ -33,26 +37,45 @@ export default function Dashboard() {
     });
 }, []);
 
+  // Award is derived and persisted server-side; the UI reflects whatever balance
+  // the POST returns, never an optimistic local guess.
+  async function awardCoins() {
+    setCoinError(null);
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration: TIMER_DURATION }),
+      });
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
+      const data = await res.json();
+      if (typeof data.coins !== 'number') throw new Error('Invalid response');
+      setCoins(data.coins); // authoritative balance from the server
+    } catch {
+      setCoinError('Could not save your coins. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Tick once per second while running. `seconds` is a dependency, so each tick
+  // re-subscribes with a fresh value; the state changes happen in the timeout
+  // callback (a deferred context), so the award request fires exactly once and
+  // never doubles under StrictMode.
   useEffect(() => {
     if (!running) return;
-    const intervalId = setInterval(() => {
-      setSeconds(sec => {
-        if (sec <= 1) {
-          clearInterval(intervalId);
-          setRunning(false);
-          setCoins(prev => Number(prev) + coinsEarned);
-          apiFetch('/api/coins', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ duration: TIMER_DURATION }),
-          });
-          return TIMER_DURATION;
-        }
-        return sec - 1;
-      });
+    const timeoutId = setTimeout(() => {
+      if (seconds <= 1) {
+        setRunning(false);
+        setSeconds(TIMER_DURATION);
+        awardCoins();
+      } else {
+        setSeconds(seconds - 1);
+      }
     }, 1000);
-    return () => clearInterval(intervalId);
-  }, [running]);
+    return () => clearTimeout(timeoutId);
+  }, [running, seconds]);
 
   function handleStartStop() {
     if (!running) {
@@ -85,6 +108,8 @@ export default function Dashboard() {
           <p className="text-sm">
             Coins: {coins !== null ? coins : '...'}
           </p>
+          {saving && <p className="text-xs text-gray-500">Saving…</p>}
+          {coinError && <p className="text-xs text-red-500">{coinError}</p>}
         </div>
         <div className="flex gap-3">
           <button onClick={handleStartStop} className="px-6 py-2 border rounded hover:bg-gray-100">
