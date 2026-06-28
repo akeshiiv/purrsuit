@@ -112,7 +112,7 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
         {error && <p className="text-sm text-red-700">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-1">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" disabled={busy} onClick={onClose}>Cancel</Button>
           <Button disabled={!canConfirm} onClick={confirm}>
             {mode === 'attack' ? 'Attack' : 'Reinforce'}
           </Button>
