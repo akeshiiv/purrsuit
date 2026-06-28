@@ -13,11 +13,13 @@ export default function RealmCreate() {
     seasonLengthDays: 7,
     antiCheat: false,
   });
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
+    setSubmitting(true);
 
     try {
       await realmService.create({
@@ -28,6 +30,7 @@ export default function RealmCreate() {
       navigate('/realm');
     } catch (caught) {
       setError(caught.message);
+      setSubmitting(false);
     }
   }
 
@@ -85,7 +88,9 @@ export default function RealmCreate() {
           />
           Anti-cheat
         </label>
-        <Button type="submit">Create</Button>
+        <Button disabled={submitting} type="submit">
+          {submitting ? 'Creating...' : 'Create'}
+        </Button>
       </form>
       {error && <p className="text-sm text-red-700">{error}</p>}
     </Card>
