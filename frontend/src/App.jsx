@@ -173,6 +173,17 @@ export default function App() {
         <Route
           element={(
             <RequireAuth>
+              <RequireRealm>
+                <Outlet />
+              </RequireRealm>
+            </RequireAuth>
+          )}
+        >
+          <Route path="/realm/study/focus" element={<FocusSession />} />
+        </Route>
+        <Route
+          element={(
+            <RequireAuth>
               <AuthLayout />
             </RequireAuth>
           )}
@@ -191,7 +202,6 @@ export default function App() {
             <Route path="/realm" element={<RealmDashboard />} />
             <Route path="/realm/map" element={<MapView />} />
             <Route path="/realm/study" element={<StudySetup />} />
-            <Route path="/realm/study/focus" element={<FocusSession />} />
             <Route path="/realm/shop" element={<Shop />} />
             <Route path="/realm/inventory" element={<Inventory />} />
             <Route path="/realm/leaderboard" element={<Leaderboard />} />
