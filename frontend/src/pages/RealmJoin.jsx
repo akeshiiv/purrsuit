@@ -6,18 +6,21 @@ import { realmService } from '../services/index.js';
 
 export default function RealmJoin() {
   const navigate = useNavigate();
-  const [joinCode, setJoinCode] = useState('W7F6G7');
+  const [joinCode, setJoinCode] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
+    setSubmitting(true);
 
     try {
       await realmService.join({ joinCode });
       navigate('/realm');
     } catch (caught) {
       setError(caught.message);
+      setSubmitting(false);
     }
   }
 
@@ -28,13 +31,17 @@ export default function RealmJoin() {
         <label className="block text-sm">
           Join code
           <input
-            className="mt-1 w-full rounded border px-3 py-2 uppercase"
+            autoFocus
+            className="mt-1 w-full rounded border px-3 py-2 font-mono uppercase tracking-widest"
             maxLength="6"
-            onChange={event => setJoinCode(event.target.value.toUpperCase())}
+            onChange={event => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+            placeholder="ABC123"
             value={joinCode}
           />
         </label>
-        <Button type="submit">Join</Button>
+        <Button disabled={submitting || joinCode.length !== 6} type="submit">
+          {submitting ? 'Joining...' : 'Join'}
+        </Button>
       </form>
       {error && <p className="text-sm text-red-700">{error}</p>}
     </Card>
