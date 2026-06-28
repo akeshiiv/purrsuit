@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import { useGame } from '../components/GameContext.jsx';
 import { usePolling } from '../hooks/usePolling.js';
@@ -32,6 +33,12 @@ export default function Leaderboard() {
 
   const { rows, season } = leaderboard;
   const ended = season?.status !== 'active';
+  const isMock = import.meta.env.VITE_USE_MOCK === 'true';
+  const otherChampion = rows.find(row => row.userId !== me.userId)?.name;
+
+  async function simulateEnd(winnerName) {
+    await leaderboardService.simulateSeasonEnd({ winnerName });
+  }
 
   return (
     <Card className="space-y-4">
@@ -90,6 +97,20 @@ export default function Leaderboard() {
       )}
 
       {error && <p className="text-sm text-red-700">{error.message}</p>}
+
+      {isMock && !ended && rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-xs text-slate-500">
+          <span>Dev:</span>
+          <Button variant="secondary" onClick={() => simulateEnd(me.name)}>
+            End season — I win
+          </Button>
+          {otherChampion && (
+            <Button variant="secondary" onClick={() => simulateEnd(otherChampion)}>
+              End season — I lose
+            </Button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
