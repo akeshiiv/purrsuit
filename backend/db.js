@@ -42,6 +42,7 @@ export async function withTransaction(fn) {
       const query = strings.reduce((acc, str, i) => acc + str + (values[i] !== undefined ? `$${i + 1}` : ''), '');
       return client.query(query, values).then((res) => res.rows);
     };
+    tx.query = (text, values = []) => client.query(text, values).then((res) => res.rows);
     const result = await fn(tx);
     await client.query('COMMIT');
     return result;
