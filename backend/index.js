@@ -10,6 +10,7 @@ import { validateAndComputeAward, parseCoins } from './src/coins.js';
 import { authenticate } from './src/middleware.js';
 import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
+import profileRouter from './src/routes/profile.js';
 import { doubleCsrfProtection, generateCsrfToken } from './src/csrf.js';
 import { globalLimiter, authLimiter } from './src/rateLimit.js';
 
@@ -35,6 +36,7 @@ app.get('/api/csrf-token', (req, res) => {
 
 // ROUTERS
 app.use('/auth', authLimiter, authRouter);
+app.use('/api/profile', authenticate, profileRouter);
 
 // API ROUTES
 
