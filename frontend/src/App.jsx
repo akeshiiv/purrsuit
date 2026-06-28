@@ -10,6 +10,7 @@ import {
 
 import { GameProvider, useGame } from './components/GameContext.jsx';
 import { useAuth } from './components/AuthContext.jsx';
+import SeasonEndGate from './components/SeasonEndGate.jsx';
 import { realmService } from './services/index.js';
 import AccountSettings from './pages/AccountSettings.jsx';
 import FocusSession from './pages/FocusSession.jsx';
@@ -160,6 +161,7 @@ function RealmLayout() {
         <Link to="/realm/inventory">Inventory</Link>
         <Link to="/realm/leaderboard">Leaderboard</Link>
       </div>
+      <SeasonEndGate />
       <Outlet />
     </div>
   );

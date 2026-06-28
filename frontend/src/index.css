@@ -1,1 +1,45 @@
 @import "tailwindcss";
+
+/* Season-end overlay motion (CSS-only; no external deps) */
+@keyframes season-pop {
+  0% { opacity: 0; transform: scale(0.92) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes season-rise {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes season-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-9px) rotate(2deg); }
+}
+@keyframes season-spin {
+  to { transform: rotate(1turn); }
+}
+@keyframes season-confetti {
+  0% { opacity: 0; transform: translateY(-12%) rotate(0deg); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(440%) rotate(560deg); }
+}
+
+.season-pop { animation: season-pop 540ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.season-rise { animation: season-rise 620ms ease-out both; }
+.season-float { animation: season-float 3.2s ease-in-out infinite; }
+.season-spin { animation: season-spin 20s linear infinite; }
+
+.season-confetti-piece {
+  position: absolute;
+  top: -14px;
+  width: 8px;
+  height: 14px;
+  border-radius: 1px;
+  animation: season-confetti 2.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-pop,
+  .season-rise,
+  .season-float,
+  .season-spin { animation: none; }
+  .season-confetti { display: none; }
+}
