@@ -10,6 +10,7 @@ import { validateAndComputeAward, parseCoins } from './src/coins.js';
 import { authenticate } from './src/middleware.js';
 import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
+import realmsRouter from './src/routes/realms.js';
 import { doubleCsrfProtection, generateCsrfToken } from './src/csrf.js';
 import { globalLimiter, authLimiter } from './src/rateLimit.js';
 
@@ -85,6 +86,8 @@ app.post('/api/coins', authenticate, async (req, res) => {
   }
 });
 
+app.use('/api', realmsRouter);
+
 // retrieve user's name
 app.get('/api/name', authenticate, async (req, res) => {
   try {
@@ -99,7 +102,7 @@ app.get('/api/name', authenticate, async (req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   if (err?.code === 'EBADCSRFTOKEN') {
-    return res.status(403).json({ error: 'Invalid CSRF token' });
+    return res.status(403).json({ error: 'CSRF_INVALID', message: 'Invalid CSRF token' });
   }
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
