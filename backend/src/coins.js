@@ -21,3 +21,17 @@ export function validateAndComputeAward(duration) {
   }
   return { ok: true, award: duration * COINS_PER_SECOND };
 }
+
+// Coerce a coins value read from the DB into a safe integer. The `coins::int`
+// SQL cast should already return a number; this is the fail-loud guard so a
+// missing row, NULL column, or driver string never silently ships to the client.
+export function parseCoins(value) {
+  if (value === null || value === undefined) {
+    throw new Error('coins value is missing');
+  }
+  const n = Number(value);
+  if (!Number.isInteger(n)) {
+    throw new Error(`invalid coins value from database: ${String(value)}`);
+  }
+  return n;
+}
