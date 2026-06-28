@@ -30,16 +30,19 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
   if (!open || !cell) return null;
 
   const maxQuantity = mode === 'attack' ? held(units, unitType) : 1;
+  // Derive a clamped quantity so a background poll that drops held units can't
+  // leave the stepper showing more than we hold (no effect → stays lint-clean).
+  const safeQuantity = Math.min(quantity, Math.max(1, maxQuantity));
   const canConfirm = !busy && (mode === 'defend'
     ? held(units, cell.unitType) >= 1
-    : maxQuantity >= 1 && quantity >= 1);
+    : maxQuantity >= 1);
 
   async function confirm() {
     setBusy(true);
     setError('');
     try {
       const result = mode === 'attack'
-        ? await mapService.attack({ x: cell.x, y: cell.y, unitType, quantity: Number(quantity) })
+        ? await mapService.attack({ x: cell.x, y: cell.y, unitType, quantity: Number(safeQuantity) })
         : await mapService.defend({ x: cell.x, y: cell.y, unitType: cell.unitType });
       onDeployed(result);
     } catch (caught) {
@@ -94,9 +97,9 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
 
                 <div className="flex items-center gap-3">
                   <span className="text-sm">Quantity</span>
-                  <Button variant="secondary" disabled={quantity <= 1} onClick={() => setQuantity(q => Math.max(1, q - 1))}>−</Button>
-                  <span className="w-8 text-center font-semibold">{quantity}</span>
-                  <Button variant="secondary" disabled={quantity >= maxQuantity} onClick={() => setQuantity(q => Math.min(maxQuantity, q + 1))}>+</Button>
+                  <Button variant="secondary" disabled={safeQuantity <= 1} onClick={() => setQuantity(Math.max(1, safeQuantity - 1))}>−</Button>
+                  <span className="w-8 text-center font-semibold">{safeQuantity}</span>
+                  <Button variant="secondary" disabled={safeQuantity >= maxQuantity} onClick={() => setQuantity(Math.min(maxQuantity, safeQuantity + 1))}>+</Button>
                   <span className="text-xs text-slate-500">/ {maxQuantity}</span>
                 </div>
               </>
