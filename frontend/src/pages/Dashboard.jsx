@@ -44,7 +44,7 @@ export default function Dashboard() {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ coinsEarned, duration: TIMER_DURATION }),
+            body: JSON.stringify({ duration: TIMER_DURATION }),
           });
           return TIMER_DURATION;
         }
