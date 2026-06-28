@@ -10,6 +10,7 @@ import { authenticate } from './src/middleware.js';
 import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
 import realmsRouter from './src/routes/realms.js';
+import shopRouter from './src/routes/shop.js';
 import studyRouter from './src/routes/study.js';
 import mapRouter from './src/routes/map.js';
 import { doubleCsrfProtection, generateCsrfToken } from './src/csrf.js';
@@ -54,6 +55,7 @@ app.get('/api/hello', (req, res) => {
 app.get('/api/me', authenticate, (req, res) => res.json(req.user));
 
 app.use('/api', realmsRouter);
+app.use('/api', shopRouter);
 app.use('/api', studyRouter);
 app.use('/api', mapRouter);
 
