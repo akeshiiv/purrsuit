@@ -11,6 +11,7 @@ import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
 import realmsRouter from './src/routes/realms.js';
 import studyRouter from './src/routes/study.js';
+import mapRouter from './src/routes/map.js';
 import { doubleCsrfProtection, generateCsrfToken } from './src/csrf.js';
 import { globalLimiter, authLimiter } from './src/rateLimit.js';
 
@@ -54,6 +55,7 @@ app.get('/api/me', authenticate, (req, res) => res.json(req.user));
 
 app.use('/api', realmsRouter);
 app.use('/api', studyRouter);
+app.use('/api', mapRouter);
 
 // retrieve user's name
 app.get('/api/name', authenticate, async (req, res) => {
