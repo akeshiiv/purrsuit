@@ -1,91 +1,81 @@
-import { useCallback, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useGame } from '../components/GameContext.jsx';
-import CellTile from '../components/ui/CellTile.jsx';
+import MapBoard from '../components/map/MapBoard.jsx';
+import DeployModal from '../components/map/DeployModal.jsx';
 import Card from '../components/ui/Card.jsx';
-import { usePolling } from '../hooks/usePolling.js';
-import { mapService } from '../services/index.js';
+import { useMapPolling } from '../hooks/useMapPolling.js';
+import { UNIT_META, attackTargets, cellKey } from '../components/map/mapModel.js';
 
 export default function MapView() {
-  const { me, refresh } = useGame();
-  const [mapState, setMapState] = useState(null);
-  const [unitType, setUnitType] = useState('A');
-  const [quantity, setQuantity] = useState(1);
-  const [message, setMessage] = useState('');
+  const { refresh } = useGame();
+  const { map, error, refresh: refreshMap } = useMapPolling(2500);
+  const [selected, setSelected] = useState(null); // { cell, mode }
+  const [result, setResult] = useState('');
 
-  const loadMap = useCallback(async since => {
-    const next = await mapService.getMap(since);
-    if (next.changed !== false) setMapState(next);
-    return next;
-  }, []);
+  const meId = map?.me?.id;
+  const targets = useMemo(() => (map ? attackTargets(map.cells, meId) : new Set()), [map, meId]);
 
-  const { error } = usePolling(loadMap, 2500);
+  if (!map) return <Card>Loading map…</Card>;
 
-  async function handleCellClick(cell) {
-    setMessage('');
-
-    try {
-      if (cell.ownerMemberId === me.id && cell.unitType) {
-        await mapService.defend({ x: cell.x, y: cell.y, unitType: cell.unitType });
-        setMessage('Defended');
-      } else {
-        const result = await mapService.attack({
-          x: cell.x,
-          y: cell.y,
-          unitType,
-          quantity: Number(quantity),
-        });
-        setMessage(result.result);
-      }
-      await loadMap(null);
-      await refresh();
-    } catch (caught) {
-      setMessage(caught.message);
+  function handleCellClick(cell) {
+    setResult('');
+    const mine = cell.ownerMemberId === meId;
+    if (mine && cell.unitType) {
+      setSelected({ cell, mode: 'defend' });
+    } else if (targets.has(cellKey(cell))) {
+      setSelected({ cell, mode: 'attack' });
     }
   }
 
-  if (!mapState) return <div>Loading map...</div>;
+  async function handleDeployed(deploy) {
+    setSelected(null);
+    if (deploy?.result) setResult(deploy.result);
+    await refreshMap();
+    await refresh();
+  }
 
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-end gap-3">
-        <h1 className="w-full text-2xl font-semibold">Map</h1>
-        <label className="text-sm">
-          Unit
-          <select
-            className="ml-2 rounded border px-2 py-1"
-            onChange={event => setUnitType(event.target.value)}
-            value={unitType}
-          >
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-          </select>
-        </label>
-        <label className="text-sm">
-          Quantity
-          <input
-            className="ml-2 w-16 rounded border px-2 py-1"
-            min="1"
-            onChange={event => setQuantity(event.target.value)}
-            type="number"
-            value={quantity}
-          />
-        </label>
-        {message && <p className="text-sm">{message}</p>}
-        {error && <p className="text-sm text-red-700">{error.message}</p>}
+      <Card className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-semibold">Map</h1>
+        <span className="text-sm text-slate-600">Tap a glowing cell to attack, or your own cell to reinforce.</span>
+        {result && <span className="text-sm font-medium text-emerald-700">Last action: {result}</span>}
+        {error && <span className="text-sm text-red-700">Couldn’t refresh — retrying…</span>}
       </Card>
-      <div
-        className="grid max-w-xl gap-1"
-        style={{ gridTemplateColumns: `repeat(${mapState.size}, minmax(0, 1fr))` }}
-      >
-        {mapState.cells.map(cell => (
-          <CellTile
-            key={`${cell.x}-${cell.y}`}
-            cell={cell}
-            onClick={handleCellClick}
-          />
+
+      <MapBoard
+        cells={map.cells}
+        size={map.size}
+        meId={meId}
+        interactive
+        onCellClick={handleCellClick}
+        highlightKeys={targets}
+        selectedKey={selected ? cellKey(selected.cell) : null}
+      />
+
+      <Card className="flex flex-wrap items-center gap-4 text-sm">
+        {map.members.map(member => (
+          <span key={member.id} className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: member.colour }} />
+            {member.name}
+          </span>
         ))}
-      </div>
+        <span className="ml-auto flex gap-3 text-slate-600">
+          {['A', 'B', 'C'].map(t => (
+            <span key={t}>{UNIT_META[t].glyph} {UNIT_META[t].label}</span>
+          ))}
+        </span>
+      </Card>
+
+      <DeployModal
+        key={selected ? `${selected.mode}-${selected.cell.x}-${selected.cell.y}` : 'none'}
+        open={Boolean(selected)}
+        mode={selected?.mode}
+        cell={selected?.cell}
+        me={map.me}
+        onClose={() => setSelected(null)}
+        onDeployed={handleDeployed}
+      />
     </div>
   );
 }
