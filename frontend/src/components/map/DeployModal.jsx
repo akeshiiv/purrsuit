@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Modal from '../ui/Modal.jsx';
 import Button from '../ui/Button.jsx';
 import { UNIT_META, beats } from './mapModel.js';
@@ -22,20 +22,10 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
     () => ['A', 'B', 'C'].filter(type => held(units, type) >= 1),
     [units],
   );
-  const [unitType, setUnitType] = useState(availableTypes[0] ?? 'A');
+  const [unitType, setUnitType] = useState(mode === 'defend' ? (cell?.unitType ?? 'A') : (availableTypes[0] ?? 'A'));
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    // Intentional reset of local form state when the modal (re)opens for a cell.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setError('');
-    setBusy(false);
-    setQuantity(1);
-    setUnitType(mode === 'defend' ? (cell?.unitType ?? 'A') : (availableTypes[0] ?? 'A'));
-  }, [open, mode, cell, availableTypes]);
 
   if (!open || !cell) return null;
 
