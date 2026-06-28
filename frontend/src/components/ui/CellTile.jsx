@@ -1,4 +1,4 @@
-import { UNIT_META, cellPalette } from '../map/mapModel.js';
+import { PALETTE, UNIT_META, cellPalette } from '../map/mapModel.js';
 
 export default function CellTile({ cell, meId, highlighted = false, selected = false, onClick }) {
   const { fill, blocked } = cellPalette(cell);
@@ -12,16 +12,25 @@ export default function CellTile({ cell, meId, highlighted = false, selected = f
     ? { type: 'button', onClick: () => onClick(cell), 'aria-label': `Cell ${cell.x}, ${cell.y}` }
     : { 'aria-hidden': true };
 
+  // Bevel + rings, all driven from PALETTE so the look stays tweakable in one place.
+  const ring = selected
+    ? `0 0 0 3px ${PALETTE.highlightRing}`
+    : (highlighted ? `0 0 0 2px ${PALETTE.highlightRing}` : null);
+  const boxShadow = [
+    'inset 0 1px 0 rgba(255,255,255,0.45)',
+    'inset 0 -2px 3px rgba(0,0,0,0.18)',
+    isHome ? `0 0 0 2px ${PALETTE.homeRing}` : null,
+    ring,
+  ].filter(Boolean).join(', ');
+
   return (
     <Tag
       className={[
         'relative aspect-square w-full rounded-[3px] text-[0.65rem] leading-none',
-        'shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-2px_3px_rgba(0,0,0,0.18)]',
         interactive ? 'cursor-pointer transition-transform hover:scale-[1.08]' : '',
-        selected ? 'z-10 ring-2 ring-amber-400' : '',
-        highlighted && !selected ? 'ring-2 ring-amber-300/70' : '',
+        selected ? 'z-10' : '',
       ].filter(Boolean).join(' ')}
-      style={{ backgroundColor: fill, outline: mine ? '1px solid rgba(0,0,0,0.22)' : undefined }}
+      style={{ backgroundColor: fill, boxShadow, outline: mine ? '1px solid rgba(0,0,0,0.22)' : undefined }}
       {...tagProps}
     >
       {isHome && <span className="absolute left-0.5 top-0.5 text-[0.55rem]">🏠</span>}

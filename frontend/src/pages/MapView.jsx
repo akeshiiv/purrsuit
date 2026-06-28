@@ -6,6 +6,12 @@ import Card from '../components/ui/Card.jsx';
 import { useMapPolling } from '../hooks/useMapPolling.js';
 import { UNIT_META, attackTargets, cellKey } from '../components/map/mapModel.js';
 
+const RESULT_LABEL = {
+  claimed: 'Claimed the cell',
+  captured: 'Captured the cell',
+  repelled: 'Attack repelled',
+};
+
 export default function MapView() {
   const { refresh } = useGame();
   const { map, error, refresh: refreshMap } = useMapPolling(2500);
@@ -39,7 +45,7 @@ export default function MapView() {
       <Card className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Map</h1>
         <span className="text-sm text-slate-600">Tap a glowing cell to attack, or your own cell to reinforce.</span>
-        {result && <span className="text-sm font-medium text-emerald-700">Last action: {result}</span>}
+        {result && <span className="text-sm font-medium text-emerald-700">Last action: {RESULT_LABEL[result] ?? result}</span>}
         {error && <span className="text-sm text-red-700">Couldn’t refresh — retrying…</span>}
       </Card>
 

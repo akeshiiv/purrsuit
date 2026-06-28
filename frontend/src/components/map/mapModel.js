@@ -6,7 +6,8 @@ export const PALETTE = {
   water: '#86c5e0',       // impassable water
   obstacle: '#3c3c44',    // impassable rock
   gridline: '#f4f1ea',    // gaps between tiles
-  highlightRing: '#f59e0b',
+  highlightRing: '#f59e0b', // attackable / selected cell ring
+  homeRing: '#1f2937',    // emphasis ring around home cells
 };
 
 export const UNIT_META = {

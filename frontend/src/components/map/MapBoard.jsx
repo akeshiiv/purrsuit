@@ -29,14 +29,19 @@ export default function MapBoard({
       >
         {cells.map(cell => {
           const key = cellKey(cell);
+          const highlighted = Boolean(highlightKeys?.has(key));
+          // Only attackable (highlighted) or own garrisoned cells are actionable;
+          // everything else stays a non-interactive div so it isn't keyboard-focusable.
+          const defendable = cell.ownerMemberId === meId && Boolean(cell.unitType);
+          const actionable = highlighted || defendable;
           return (
             <CellTile
               key={key}
               cell={cell}
               meId={meId}
-              highlighted={Boolean(highlightKeys?.has(key))}
+              highlighted={highlighted}
               selected={selectedKey === key}
-              onClick={interactive ? onCellClick : undefined}
+              onClick={interactive && actionable ? onCellClick : undefined}
             />
           );
         })}
