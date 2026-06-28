@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import { config } from './config/env.js';
 
-const SECRET = process.env.JWT_SECRET;
+const SECRET = config.JWT_SECRET;
 const TOKEN_EXPIRY = '7d'; // tokens expire in 7 days
 
 export const signToken = (payload) =>
