@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/auth/:path*", "destination": "https://purrsuit-backend.vercel.app/auth/:path*" },
+    { "source": "/api/:path*", "destination": "https://purrsuit-backend.vercel.app/api/:path*" },
+    { "source": "/:path*", "destination": "/index.html" }
+  ]
+}
