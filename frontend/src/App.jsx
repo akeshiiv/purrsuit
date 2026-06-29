@@ -151,15 +151,14 @@ function RealmLayout() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded border bg-white p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded border bg-white px-4 py-3 text-sm">
         <span className="font-medium">{realm.name}</span>
-        <span>Coins: {me.coins}</span>
-        <Link to="/realm">Dashboard</Link>
-        <Link to="/realm/map">Map</Link>
-        <Link to="/realm/study">Study</Link>
-        <Link to="/realm/shop">Shop</Link>
-        <Link to="/realm/inventory">Inventory</Link>
-        <Link to="/realm/leaderboard">Leaderboard</Link>
+        <span className="text-slate-500">Coins: {me.coins}</span>
+        <nav className="ml-auto flex flex-wrap items-center gap-x-8 gap-y-2">
+          <Link to="/realm">Dashboard</Link>
+          <Link to="/realm/inventory">Inventory</Link>
+          <Link to="/realm/leaderboard">Leaderboard</Link>
+        </nav>
       </div>
       <SeasonEndGate />
       <Outlet />
