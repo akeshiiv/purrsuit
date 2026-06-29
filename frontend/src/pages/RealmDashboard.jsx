@@ -51,7 +51,7 @@ export default function RealmDashboard() {
           <div className="mt-3 flex flex-wrap gap-2">
             <Link to="/realm/study" className="rounded border px-3 py-1 text-sm">Study</Link>
             <Link to="/realm/shop" className="rounded border px-3 py-1 text-sm">Shop</Link>
-            <Link to="/realm/map" className="rounded border px-3 py-1 text-sm">Map</Link>
+            <Link to="/realm/map" className="rounded border px-3 py-1 text-sm">Attack</Link>
           </div>
         </Card>
 
