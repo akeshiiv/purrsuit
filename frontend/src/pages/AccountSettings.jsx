@@ -165,7 +165,7 @@ export default function AccountSettings() {
           <label className="block text-sm">
             Territory Colour
             <input
-              className="mt-1 h-10 w-20 rounded border"
+              className="mt-1 block h-10 w-20 rounded border"
               onChange={event => setForm({ ...form, colour: event.target.value })}
               type="color"
               value={form.colour}
