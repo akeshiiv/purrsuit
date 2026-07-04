@@ -27,10 +27,10 @@ export default function RealmDashboard() {
         {board ? (
           <Link to="/realm/map" className="block transition hover:opacity-95" aria-label="Open the full map">
             <MapBoard cells={board.cells} size={board.size} meId={me.id} className="max-w-sm" />
-            <p className="mt-2 text-center text-sm text-slate-500">Tap to open the full map →</p>
+            <p className="mt-2 text-center text-sm text-slate-500">Open Map →</p>
           </Link>
         ) : (
-          <p className="text-sm text-slate-500">Loading planet…</p>
+          <p className="text-sm text-slate-500">Loading realm...</p>
         )}
       </Card>
 
@@ -43,10 +43,10 @@ export default function RealmDashboard() {
               <p className="text-sm">
                 Units: {['A', 'B', 'C'].map(t => `${UNIT_META[t].glyph} ${me.units[UNIT_META[t].key]}`).join('  ')}
               </p>
-              <p className="text-sm">Study: {Math.round(me.secondsStudied / 60)} min</p>
+              <p className="text-sm">Studied: {Math.round(me.secondsStudied / 60)} min</p>
             </>
           ) : (
-            <p className="mt-2 text-sm text-slate-500">Loading…</p>
+            <p className="mt-2 text-sm text-slate-500">Loading...</p>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             <Link to="/realm/study" className="rounded border px-3 py-1 text-sm">Study</Link>

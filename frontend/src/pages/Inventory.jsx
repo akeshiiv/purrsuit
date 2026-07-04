@@ -37,7 +37,7 @@ export default function Inventory() {
   }
 
   if (!inventory) {
-    return <p className="text-sm text-slate-500">Loading inventory…</p>;
+    return <p className="text-sm text-slate-500">Loading inventory...</p>;
   }
 
   const slots = buildSlots(inventory.units);

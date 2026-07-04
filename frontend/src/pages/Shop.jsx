@@ -42,7 +42,7 @@ export default function Shop() {
   }
 
   if (!inventory) {
-    return <p className="text-sm text-slate-500">Loading shop…</p>;
+    return <p className="text-sm text-slate-500">Loading shop...</p>;
   }
 
   const { coins, total, actions } = inventory;
@@ -60,17 +60,17 @@ export default function Shop() {
 
         {full && (
           <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Inventory full. Deploy units on the <Link className="underline" to="/realm/map">map</Link> before recruiting more.
+            Inventory full! Quickly deploy cats on the <Link className="underline" to="/realm/map">map</Link> before recruiting more.
           </p>
         )}
         {!full && broke && (
           <p className="rounded bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            You need {UNIT_COST} coins to recruit a unit. <Link className="underline" to="/realm/study">Study</Link> to earn more.
+            You need {UNIT_COST} coins to recruit a cat. <Link className="underline" to="/realm/study">Study</Link> to earn more.
           </p>
         )}
         {!full && !broke && actions.mustBuy && (
           <p className="rounded bg-blue-50 px-3 py-2 text-sm text-blue-800">
-            You have coins to spend — recruit a unit to keep studying and attacking.
+            You're too rich! Recruit a cat before you continue studying or attacking.
           </p>
         )}
       </Card>
@@ -92,7 +92,7 @@ export default function Shop() {
                 disabled={!actions.canBuy || buying !== null}
                 onClick={() => buy(unitType)}
               >
-                {buying === unitType ? 'Recruiting…' : 'Recruit'}
+                {buying === unitType ? 'Recruiting...' : 'Recruit'}
               </Button>
             </Card>
           );
@@ -103,7 +103,7 @@ export default function Shop() {
       {error && <p className="text-sm text-red-700">{error}</p>}
 
       <p className="text-sm text-slate-500">
-        <Link className="underline" to="/realm/inventory">View inventory →</Link>
+        <Link className="underline" to="/realm/inventory">View Inventory →</Link>
       </p>
     </div>
   );

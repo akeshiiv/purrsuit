@@ -42,7 +42,7 @@ export default function RealmSelect() {
       {current?.realm ? (
         <div className="space-y-3">
           <p>
-            You are in <span className="font-medium">{current.realm.name}</span>
+            You're in <span className="font-medium">{current.realm.name}</span>
             {' '}({current.realm.joinCode}).
           </p>
           <div className="flex flex-wrap gap-2">
@@ -52,7 +52,7 @@ export default function RealmSelect() {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">Create your own realm or join one with a code.</p>
+          <p className="text-sm text-slate-600">Create your own realm, or join one with a code from your realm admin.</p>
           <div className="flex flex-wrap gap-2">
             <Link className="rounded border border-blue-700 bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700" to="/realms/create">
               Create realm

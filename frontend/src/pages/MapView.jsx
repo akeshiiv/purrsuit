@@ -21,7 +21,7 @@ export default function MapView() {
   const meId = map?.me?.id;
   const targets = useMemo(() => (map ? attackTargets(map.cells, meId) : new Set()), [map, meId]);
 
-  if (!map) return <Card>Loading map…</Card>;
+  if (!map) return <Card>Loading map...</Card>;
 
   function handleCellClick(cell) {
     setResult('');
@@ -44,9 +44,9 @@ export default function MapView() {
     <div className="space-y-4">
       <Card className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Map</h1>
-        <span className="text-sm text-slate-600">Tap a glowing cell to attack, or your own cell to reinforce.</span>
+        <span className="text-sm text-slate-600">Tap a highlighted cell to ATTACK, or your own cell to DEFEND.</span>
         {result && <span className="text-sm font-medium text-emerald-700">Last action: {RESULT_LABEL[result] ?? result}</span>}
-        {error && <span className="text-sm text-red-700">Couldn’t refresh — retrying…</span>}
+        {error && <span className="text-sm text-red-700">Couldn't refresh — retrying...</span>}
       </Card>
 
       <MapBoard

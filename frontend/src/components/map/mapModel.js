@@ -1,13 +1,13 @@
-// Single source of truth for map theming + pure map logic.
-// Keep this file free of React/DOM imports so `node --test` can run it.
+// SSOT: Map UI/UX + Game logic. 
+// NO REACT/DOM IMPORTS!
 
 export const PALETTE = {
-  neutralLand: '#e9e1d4', // unowned land
-  water: '#86c5e0',       // impassable water
-  obstacle: '#3c3c44',    // impassable rock
-  gridline: '#f4f1ea',    // gaps between tiles
-  highlightRing: '#f59e0b', // attackable / selected cell ring
-  homeRing: '#1f2937',    // emphasis ring around home cells
+  neutralLand: '#e9e1d4',
+  water: '#86c5e0',
+  obstacle: '#3c3c44',
+  gridline: '#f4f1ea',
+  highlightRing: '#f59e0b', // valid cells to attack
+  homeRing: '#1f2937', // highlight home base
 };
 
 export const UNIT_META = {

@@ -29,7 +29,7 @@ export default function Leaderboard() {
   const { error } = usePolling(loadLeaderboard, 4000);
   useSecondTicker();
 
-  if (!leaderboard) return <Card>Loading leaderboard…</Card>;
+  if (!leaderboard) return <Card>Loading leaderboard...</Card>;
 
   const { rows, season } = leaderboard;
   const ended = season?.status !== 'active';
@@ -59,7 +59,7 @@ export default function Leaderboard() {
               <th className="py-1">Player</th>
               <th className="py-1 text-right">Territories</th>
               <th className="py-1 text-right">Battles</th>
-              <th className="py-1 text-right">Study</th>
+              <th className="py-1 text-right">Study Time</th>
             </tr>
           </thead>
           <tbody>
@@ -84,7 +84,7 @@ export default function Leaderboard() {
                   <td className="py-2 text-right align-top">
                     <div>{row.territories}</div>
                     <div className="text-xs text-slate-400">
-                      A {row.cellsA} · B {row.cellsB} · C {row.cellsC}
+                      {row.cellsA} A + {row.cellsB} B + {row.cellsC} C
                     </div>
                   </td>
                   <td className="py-2 text-right align-top">{row.battlesWon}</td>

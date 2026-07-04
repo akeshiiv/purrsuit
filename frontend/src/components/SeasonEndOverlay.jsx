@@ -88,15 +88,15 @@ export default function SeasonEndOverlay({ winnerName, rows = [], me, onAck, ack
               style={{ animationDelay: '240ms' }}
             >
               {victory
-                ? 'You held the most territory this season.'
-                : `${winnerName ?? 'Nobody'} claimed the crown.`}
+                ? 'Most studious cat general this season!'
+                : `${winnerName ?? 'Nobody'} won this season, GGWP!`}
             </p>
             {placement && (
               <p
                 className="season-rise mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1 text-sm ring-1 ring-white/25 backdrop-blur"
                 style={{ animationDelay: '320ms' }}
               >
-                <span className="opacity-80">Your finish</span>
+                <span className="opacity-80">You placed</span>
                 <span className="font-bold">#{placement}</span>
                 <span className="opacity-80">of {total}</span>
               </p>

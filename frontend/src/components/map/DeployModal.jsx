@@ -5,11 +5,11 @@ import { UNIT_META, beats } from './mapModel.js';
 import { mapService } from '../../services/index.js';
 
 const FRIENDLY = {
-  INSUFFICIENT_UNITS: 'You do not have enough of that unit.',
-  NOT_ADJACENT: 'You can only attack cells next to your territory.',
-  INVALID_TARGET: 'That cell cannot be attacked.',
-  UNIT_TYPE_MISMATCH: 'Reinforcements must match the garrison unit.',
-  NOT_OWNER: 'You can only defend your own cells.',
+  INSUFFICIENT_UNITS: 'You have no units! Buy some first.',
+  NOT_ADJACENT: 'Only attack cells next to your territory.',
+  INVALID_TARGET: 'That cell cannot be attacked :(',
+  UNIT_TYPE_MISMATCH: 'Unit type mismatch!',
+  NOT_OWNER: 'Bruh, only defend your own territory.',
 };
 
 function held(units, type) {
@@ -30,8 +30,6 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
   if (!open || !cell) return null;
 
   const maxQuantity = mode === 'attack' ? held(units, unitType) : 1;
-  // Derive a clamped quantity so a background poll that drops held units can't
-  // leave the stepper showing more than we hold (no effect → stays lint-clean).
   const safeQuantity = Math.min(quantity, Math.max(1, maxQuantity));
   const canConfirm = !busy && (mode === 'defend'
     ? held(units, cell.unitType) >= 1
@@ -64,12 +62,12 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
           <>
             <p className="text-sm text-slate-600">
               {enemy
-                ? `Enemy garrison: ${defenderUnit ? `${defenderUnit.glyph} ${defenderUnit.label}` : '—'} ×${cell.troopCount}`
-                : 'Neutral cell — claim it for your colour.'}
+                ? `Enemy cats: ${defenderUnit ? `${defenderUnit.glyph} ${defenderUnit.label}` : '—'} × ${cell.troopCount}`
+                : 'Neutral land'}
             </p>
 
             {availableTypes.length === 0 ? (
-              <p className="text-sm text-red-700">You have no units to deploy. Visit the shop first.</p>
+              <p className="text-sm text-red-700">No cats held, visit the shop first!</p>
             ) : (
               <>
                 <div className="flex gap-2">
@@ -91,7 +89,7 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
                   <p className="text-xs text-slate-500">
                     {beats(unitType, cell.unitType)
                       ? `${UNIT_META[unitType].glyph} beats ${defenderUnit.glyph} — captures if quantity ≥ ${cell.troopCount}.`
-                      : `${UNIT_META[unitType].glyph} does not beat ${defenderUnit.glyph} — this attack will be repelled.`}
+                      : `${UNIT_META[unitType].glyph} does not beat ${defenderUnit.glyph} — this attack is useless.`}
                   </p>
                 )}
 
@@ -108,7 +106,7 @@ export default function DeployModal({ open, mode, cell, me, onClose, onDeployed 
         ) : (
           <p className="text-sm text-slate-600">
             Reinforce {defenderUnit ? `${defenderUnit.glyph} ${defenderUnit.label}` : 'this cell'} (now ×{cell.troopCount}).
-            You hold {held(units, cell.unitType)} matching unit{held(units, cell.unitType) === 1 ? '' : 's'}.
+            You currently hold {held(units, cell.unitType)} unit{held(units, cell.unitType) === 1 ? '' : 's'}.
           </p>
         )}
 

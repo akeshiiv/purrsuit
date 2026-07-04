@@ -53,9 +53,9 @@ export default function RealmCreate() {
             onChange={event => setForm({ ...form, mapPreset: event.target.value })}
             value={form.mapPreset}
           >
-            <option value="open_plains">open_plains</option>
-            <option value="crossroads">crossroads</option>
-            <option value="archipelago">archipelago</option>
+            <option value="open_plains">Open Plains</option>
+            <option value="crossroads">Crossroads</option>
+            <option value="archipelago">Archipelago</option>
           </select>
         </label>
         <label className="block text-sm">

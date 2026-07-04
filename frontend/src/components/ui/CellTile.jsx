@@ -12,7 +12,6 @@ export default function CellTile({ cell, meId, highlighted = false, selected = f
     ? { type: 'button', onClick: () => onClick(cell), 'aria-label': `Cell ${cell.x}, ${cell.y}` }
     : { 'aria-hidden': true };
 
-  // Bevel + rings, all driven from PALETTE so the look stays tweakable in one place.
   const ring = selected
     ? `0 0 0 3px ${PALETTE.highlightRing}`
     : (highlighted ? `0 0 0 2px ${PALETTE.highlightRing}` : null);

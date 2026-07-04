@@ -86,7 +86,7 @@ export default function AccountSettings() {
   function askLeave() {
     setConfirm({
       title: 'Leave realm?',
-      message: 'You will forfeit every cell you hold this season. This cannot be undone.',
+      message: 'You will forfeit all territories and cats. This cannot be undone. Do you really want to go? :(',
       confirmLabel: 'Leave realm',
       run: async () => {
         await realmService.leave();
@@ -98,7 +98,7 @@ export default function AccountSettings() {
   function askEndSeason() {
     setConfirm({
       title: 'End the season now?',
-      message: 'The current leader is crowned and a fresh season starts for everyone.',
+      message: 'The current leader is crowned immediately. Everyone starts over in a new season.',
       confirmLabel: 'End season',
       run: async () => {
         await realmService.endSeason(game.realm.id);
@@ -109,8 +109,8 @@ export default function AccountSettings() {
 
   function askKick(member) {
     setConfirm({
-      title: `Kick ${member.name}?`,
-      message: 'Their territory is released back to neutral.',
+      title: `Kick ${member.name}? This cannot be undone!!!`,
+      message: 'Their territory becomes neutral land.',
       confirmLabel: 'Kick player',
       run: async () => {
         await realmService.kick(game.realm.id, member.userId);
@@ -163,7 +163,7 @@ export default function AccountSettings() {
             />
           </label>
           <label className="block text-sm">
-            Colour
+            Territory Colour
             <input
               className="mt-1 h-10 w-20 rounded border"
               onChange={event => setForm({ ...form, colour: event.target.value })}
@@ -239,8 +239,8 @@ export default function AccountSettings() {
       ) : (
         <Card className="max-w-lg space-y-2">
           <h2 className="text-xl font-semibold">Realm</h2>
-          <p className="text-sm text-slate-600">You are not in a realm.</p>
-          <Button onClick={() => navigate('/realms')}>Find a realm</Button>
+          <p className="text-sm text-slate-600">You're currently not in any realm.</p>
+          <Button onClick={() => navigate('/realms')}>Find or create a realm!</Button>
         </Card>
       )}
 

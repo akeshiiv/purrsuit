@@ -20,7 +20,7 @@ export default function StudySetup() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Study</h1>
         <p className="text-sm text-slate-600">
-          Pick a focus length. You earn 4 coins per minute studied.
+          Pick your study session length. You earn 4 coins per 1 minute studied.
         </p>
       </header>
 
@@ -53,9 +53,9 @@ export default function StudySetup() {
         </Button>
       ) : (
         <div className="space-y-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          <p>You have enough coins to shop. Buy units before studying again.</p>
+          <p>You're too rich! Buy a cat before you can study again.</p>
           <Link className="inline-block font-medium underline" to="/realm/shop">
-            Go to shop
+            Fine, I'll shop →
           </Link>
         </div>
       )}
