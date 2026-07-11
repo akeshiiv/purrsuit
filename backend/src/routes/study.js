@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware.js';
 import { RealmError } from '../realms/service.js';
-import { completeStudy } from '../study/service.js';
+import { completeStudy, getStudyStats } from '../study/service.js';
 
 const router = Router();
 
@@ -15,6 +15,11 @@ router.use(authenticate);
 
 router.post('/study/complete', asyncHandler(async (req, res) => {
   const payload = await completeStudy(req.user.id, req.body);
+  res.json(payload);
+}));
+
+router.get('/study/stats', asyncHandler(async (req, res) => {
+  const payload = await getStudyStats(req.user.id, req.query.tz);
   res.json(payload);
 }));
 
