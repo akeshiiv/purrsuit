@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router';
 import Card from '../components/ui/Card.jsx';
 import MapBoard from '../components/map/MapBoard.jsx';
+import StatsSummary from '../components/StatsSummary.jsx';
 import { useGame } from '../components/GameContext.jsx';
 import { useMapPolling } from '../hooks/useMapPolling.js';
 import { UNIT_META, standings } from '../components/map/mapModel.js';
@@ -69,6 +70,8 @@ export default function RealmDashboard() {
             ))}
           </ol>
         </Card>
+
+        <StatsSummary />
       </div>
     </div>
   );
