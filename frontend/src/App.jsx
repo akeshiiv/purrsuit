@@ -23,6 +23,7 @@ import RealmDashboard from './pages/RealmDashboard.jsx';
 import RealmJoin from './pages/RealmJoin.jsx';
 import RealmSelect from './pages/RealmSelect.jsx';
 import Shop from './pages/Shop.jsx';
+import Stats from './pages/Stats.jsx';
 import StudySetup from './pages/StudySetup.jsx';
 
 function RequireAuth({ children }) {
@@ -158,6 +159,7 @@ function RealmLayout() {
           <Link to="/realm">Dashboard</Link>
           <Link to="/realm/inventory">Inventory</Link>
           <Link to="/realm/leaderboard">Leaderboard</Link>
+          <Link to="/realm/stats">Stats</Link>
         </nav>
       </div>
       <SeasonEndGate />
@@ -206,6 +208,7 @@ export default function App() {
             <Route path="/realm/shop" element={<Shop />} />
             <Route path="/realm/inventory" element={<Inventory />} />
             <Route path="/realm/leaderboard" element={<Leaderboard />} />
+            <Route path="/realm/stats" element={<Stats />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
