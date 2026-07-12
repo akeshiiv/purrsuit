@@ -10,3 +10,8 @@ export function complete(durationMinutes) {
     body: JSON.stringify(payload),
   });
 }
+
+export function getStats(tz) {
+  const query = tz ? `?tz=${encodeURIComponent(tz)}` : '';
+  return request(`/api/study/stats${query}`);
+}

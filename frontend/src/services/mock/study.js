@@ -23,3 +23,42 @@ export async function complete(durationMinutes) {
     actions: actionsFor(),
   });
 }
+
+// A plausible, deterministic StudyStats derived from mock state. The mock has
+// no real session log, so all-time is a fixed baseline plus the current
+// season's studied time; the streak is a fixed sample.
+function statBlock(totalSeconds, sessionCount, totalCoins, activeDays) {
+  return {
+    totalSeconds,
+    sessionCount,
+    totalCoins,
+    avgSessionSeconds: sessionCount > 0 ? Math.round(totalSeconds / sessionCount) : 0,
+    activeDays,
+    avgSecondsPerActiveDay: activeDays > 0 ? Math.round(totalSeconds / activeDays) : 0,
+  };
+}
+
+export async function getStats() {
+  const seasonSeconds = state.me?.secondsStudied ?? 0;
+  const seasonSessions = seasonSeconds > 0 ? Math.max(1, Math.round(seasonSeconds / 1500)) : 0;
+  const seasonCoins = seasonSessions * 100;
+  const inActiveSeason = Boolean(state.realm) && state.season?.status === 'active';
+
+  const season = inActiveSeason
+    ? statBlock(seasonSeconds, seasonSessions, seasonCoins, Math.min(seasonSessions, 5))
+    : null;
+
+  const BASELINE_SECONDS = 180000; // ~50h of prior history
+  const allTime = statBlock(
+    BASELINE_SECONDS + seasonSeconds,
+    30 + seasonSessions,
+    12000 + seasonCoins,
+    22 + (season ? season.activeDays : 0),
+  );
+
+  return clone({
+    streak: { current: 4, longest: 9 },
+    allTime,
+    season,
+  });
+}
