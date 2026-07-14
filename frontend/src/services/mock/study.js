@@ -1,4 +1,4 @@
-import { actionsFor, bumpVersion, clone, mockError, state } from './state.js';
+import { actionsFor, advanceMockQuest, bumpVersion, clone, mockError, state } from './state.js';
 
 export async function complete(durationMinutes) {
   const payload = typeof durationMinutes === 'object'
@@ -17,9 +17,11 @@ export async function complete(durationMinutes) {
   state.me.secondsStudied += minutes * 60;
   bumpVersion();
 
+  const quest = advanceMockQuest('study.complete');
   return clone({
     coins: state.me.coins,
     secondsStudied: state.me.secondsStudied,
     actions: actionsFor(),
+    ...(quest.questCompleted ? { questCompleted: quest.questCompleted } : {}),
   });
 }

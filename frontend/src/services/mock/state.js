@@ -2,6 +2,16 @@ const DEFAULT_JOIN_CODE = 'W7F6G7';
 const UNIT_KEYS = { A: 'a', B: 'b', C: 'c' };
 const BEATS = { A: 'B', B: 'C', C: 'A' };
 
+const MOCK_QUESTS = {
+  buy_three_units: { title: 'Restock', description: 'Buy any 3 cat units today', kind: 'count', target: 3, event: 'shop.buy' },
+  five_sessions_today: { title: 'Grind Set', description: 'Log 5 study sessions today', kind: 'count', target: 5, event: 'study.complete' },
+};
+const DEFAULT_MOCK_QUEST = 'buy_three_units';
+
+function makeQuest(key = DEFAULT_MOCK_QUEST) {
+  return { key, current: 0, completed: false };
+}
+
 function makeRealm(overrides = {}) {
   return {
     id: 7,
@@ -138,6 +148,7 @@ export const state = {
   me: makeMe(),
   members: makeOtherMembers(),
   seasonAcked: false,
+  dailyQuest: makeQuest(),
 };
 
 state.cells = makeCells(state.realm.mapSize, state.me, state.members);
@@ -243,6 +254,7 @@ export function currentRealmPayload() {
     me: { ...state.me, actions: actionsFor() },
     members: [state.me, ...state.members].map(publicMember),
     miniLeaderboard: leaderboardRows().slice(0, 3),
+    dailyQuest: dailyQuestPayload(),
   });
 }
 
@@ -281,6 +293,7 @@ export function resetForRealm(realm, role = 'admin') {
   state.members = makeOtherMembers();
   state.cells = makeCells(state.realm.mapSize, state.me, state.members);
   state.seasonAcked = false;
+  state.dailyQuest = makeQuest();
 }
 
 export function createRealm(settings) {
@@ -302,4 +315,34 @@ export function joinRealm(joinCode) {
 
 export function unitBeats(attacker, defender) {
   return BEATS[attacker] === defender;
+}
+
+// Serialise the mock's daily quest to the DailyQuest payload, or null when done.
+export function dailyQuestPayload() {
+  const quest = state.dailyQuest;
+  if (!quest || quest.completed) return null;
+  const def = MOCK_QUESTS[quest.key];
+  return {
+    key: quest.key,
+    title: def.title,
+    description: def.description,
+    reward: 100,
+    progress: { current: quest.current, target: def.target },
+    questDate: '2026-07-14',
+  };
+}
+
+// Advance the mock quest for an event; returns questCompleted + coinsAwarded,
+// mirroring the backend contract. Only the current quest's event advances it.
+export function advanceMockQuest(event) {
+  const quest = state.dailyQuest;
+  if (!quest || quest.completed) return { questCompleted: null, coinsAwarded: 0 };
+  const def = MOCK_QUESTS[quest.key];
+  if (def.event !== event) return { questCompleted: null, coinsAwarded: 0 };
+  quest.current += 1;
+  if (quest.current < def.target) return { questCompleted: null, coinsAwarded: 0 };
+  quest.completed = true;
+  state.me.coins += 100;
+  bumpVersion();
+  return { questCompleted: { key: quest.key, title: def.title, reward: 100 }, coinsAwarded: 100 };
 }
