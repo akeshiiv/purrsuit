@@ -7,16 +7,28 @@ export function createTransformersDetector({ model, dtype = 'q4', onProgress } =
   let seq = 0;
   const pending = new Map();
   let resolveReady;
-  const ready = new Promise((res) => { resolveReady = res; });
+  let rejectReady;
+  let settled = false;
+  const ready = new Promise((res, rej) => { resolveReady = res; rejectReady = rej; });
+  const settleReady = (fn, value) => { if (!settled) { settled = true; fn(value); } };
+
+  // A worker that fails to load/parse must reject `ready` — otherwise the caller
+  // awaits it forever and the session hangs in warming with the screen-share live.
+  worker.onerror = (event) => {
+    settleReady(rejectReady, new Error(event?.message || 'model worker failed to load'));
+  };
 
   worker.onmessage = (e) => {
     const { type, id, verdict, progress, message } = e.data;
-    if (type === 'ready') resolveReady();
+    if (type === 'ready') settleReady(resolveReady);
     else if (type === 'progress') onProgress && onProgress(progress);
     else if (type === 'result') pending.get(id)?.resolve(verdict);
     else if (type === 'error') {
       if (message) console.warn('[focus-guard] inference error:', message);
-      pending.get(id)?.resolve(emptyVerdict()); // fail safe: never fabricate a distraction
+      // An init-time error (no request id) must reject `ready`; a per-frame
+      // error fails safe to a focused verdict (never fabricate a distraction).
+      if (id == null) settleReady(rejectReady, new Error(message || 'model init failed'));
+      else pending.get(id)?.resolve(emptyVerdict());
     }
     if (id != null) pending.delete(id);
   };
