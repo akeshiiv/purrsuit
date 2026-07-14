@@ -14,7 +14,10 @@ export function createTransformersDetector({ model, dtype = 'q4', onProgress } =
     if (type === 'ready') resolveReady();
     else if (type === 'progress') onProgress && onProgress(progress);
     else if (type === 'result') pending.get(id)?.resolve(verdict);
-    else if (type === 'error') pending.get(id)?.resolve(emptyVerdict()); // fail safe: never fabricate distraction
+    else if (type === 'error') {
+      if (message) console.warn('[focus-guard] inference error:', message);
+      pending.get(id)?.resolve(emptyVerdict()); // fail safe: never fabricate a distraction
+    }
     if (id != null) pending.delete(id);
   };
   worker.postMessage({ type: 'init', modelId: model, dtype });
