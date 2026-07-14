@@ -1,5 +1,14 @@
 import { actionsFor, advanceMockQuest, bumpVersion, clone, mockError, state } from './state.js';
 
+const DISTRACTION_REASONS = ['social-media', 'entertainment', 'chat-nonacademic', 'gaming', 'shopping', 'other'];
+
+export async function terminate(input = {}) {
+  if (!DISTRACTION_REASONS.includes(input.reason)) {
+    throw mockError('INVALID_REASON', 'Unknown distraction reason.', 400);
+  }
+  return clone({ logged: true });
+}
+
 export async function complete(durationMinutes) {
   const payload = typeof durationMinutes === 'object'
     ? durationMinutes
