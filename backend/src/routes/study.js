@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../middleware.js';
 import { RealmError } from '../realms/service.js';
 import { completeStudy, getStudyStats } from '../study/service.js';
+import { logTermination } from '../study/terminate.js';
 
 const router = Router();
 
@@ -20,6 +21,11 @@ router.post('/study/complete', asyncHandler(async (req, res) => {
 
 router.get('/study/stats', asyncHandler(async (req, res) => {
   const payload = await getStudyStats(req.user.id, req.query.tz);
+  res.json(payload);
+}));
+
+router.post('/study/terminate', asyncHandler(async (req, res) => {
+  const payload = await logTermination(req.user.id, req.body);
   res.json(payload);
 }));
 
