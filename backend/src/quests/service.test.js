@@ -114,3 +114,51 @@ test('evaluateQuest counts sessions for five_sessions_today', async () => {
   assert.equal(out.coinsAwarded, 100);
   assert.match(progressWritten, /"current":5/);
 });
+
+test('capture_leader_cell completes when the captured cell\'s prior owner was the pre-attack leader', async () => {
+  // GROUP BY returns POST-attack counts: attacker (4) has already gained the cell
+  // it captured, and prior owner (5) has already lost it. preCaptureLeader undoes
+  // that single move (+1 to prior owner, -1 to attacker) to recover the state just
+  // BEFORE the capture: attacker 5-1=4, prior owner 4+1=5 → prior owner (5) is the
+  // pre-attack leader, so the quest completes.
+  //
+  // This test hinges on the +1/-1 reconstruction: WITHOUT it, the raw post-attack
+  // counts make the attacker (4, c=5) the leader, priorOwner(5) !== leader(4), and
+  // the quest would NOT complete. Passing here proves the undo is applied.
+  const query = makeQuery([
+    { match: 'INSERT INTO daily_quests', rows: () => [] },
+    { match: 'SELECT id, quest_key', rows: () => [{ id: 10, quest_key: 'capture_leader_cell', progress: {}, completed_at: null }] },
+    { match: 'GROUP BY owner_member_id', rows: () => [{ owner_member_id: 4, c: 5 }, { owner_member_id: 5, c: 4 }] },
+    { match: 'UPDATE daily_quests SET progress', rows: () => [] },
+    { match: 'UPDATE daily_quests SET completed_at', rows: () => [{ id: 10 }] },
+    { match: 'UPDATE realm_members SET coins', rows: () => [] },
+    { match: 'UPDATE seasons SET state_version', rows: () => [] },
+  ]);
+  const out = await evaluateQuest(query, {
+    userId: 1, realmId: 2, seasonId: 3, memberId: 4,
+    event: 'attack', data: { result: 'captured', priorOwnerMemberId: 5 }, now: new Date('2026-07-14T04:00:00Z'),
+  });
+  assert.equal(out.coinsAwarded, 100);
+  assert.equal(out.questCompleted.key, 'capture_leader_cell');
+});
+
+test('capture_leader_cell does NOT complete when the prior owner was not the pre-attack leader', async () => {
+  // After the +1/-1 undo the prior owner (5) sits at 5 and the attacker (4) at 4,
+  // but a third member (9, c=20) dominates the board and remains the pre-attack
+  // leader. priorOwner(5) !== leader(9) → no completion, no coins. The coins handler
+  // throws so any wrongful award fails the test loudly.
+  const query = makeQuery([
+    { match: 'INSERT INTO daily_quests', rows: () => [] },
+    { match: 'SELECT id, quest_key', rows: () => [{ id: 10, quest_key: 'capture_leader_cell', progress: {}, completed_at: null }] },
+    { match: 'GROUP BY owner_member_id', rows: () => [{ owner_member_id: 9, c: 20 }, { owner_member_id: 4, c: 5 }, { owner_member_id: 5, c: 4 }] },
+    { match: 'UPDATE daily_quests SET progress', rows: () => [] },
+    { match: 'UPDATE daily_quests SET completed_at', rows: () => [{ id: 10 }] },
+    { match: 'UPDATE realm_members SET coins', rows: () => { throw new Error('must not award'); } },
+  ]);
+  const out = await evaluateQuest(query, {
+    userId: 1, realmId: 2, seasonId: 3, memberId: 4,
+    event: 'attack', data: { result: 'captured', priorOwnerMemberId: 5 }, now: new Date('2026-07-14T04:00:00Z'),
+  });
+  assert.equal(out.coinsAwarded, 0);
+  assert.equal(out.questCompleted, null);
+});
