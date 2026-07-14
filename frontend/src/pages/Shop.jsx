@@ -17,6 +17,7 @@ export default function Shop() {
   const [inventory, setInventory] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [questNotice, setQuestNotice] = useState('');
   const [buying, setBuying] = useState(null);
 
   useEffect(() => {
@@ -28,12 +29,16 @@ export default function Shop() {
   async function buy(unitType) {
     setError('');
     setNotice('');
+    setQuestNotice('');
     setBuying(unitType);
     try {
-      await shopService.buy({ unitType });
+      const result = await shopService.buy({ unitType });
       setInventory(await shopService.getInventory());
       await refresh();
       setNotice(`Recruited ${UNIT_META[unitType].name}.`);
+      if (result.questCompleted) {
+        setQuestNotice(`Quest complete! +${result.questCompleted.reward} coins · ${result.questCompleted.title}`);
+      }
     } catch (caught) {
       setError(caught.message);
     } finally {
@@ -99,6 +104,7 @@ export default function Shop() {
         })}
       </div>
 
+      {questNotice && <p className="text-sm font-semibold text-amber-600">{questNotice}</p>}
       {notice && <p className="text-sm text-emerald-700">{notice}</p>}
       {error && <p className="text-sm text-red-700">{error}</p>}
 

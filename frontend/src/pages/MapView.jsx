@@ -17,6 +17,7 @@ export default function MapView() {
   const { map, error, refresh: refreshMap } = useMapPolling(2500);
   const [selected, setSelected] = useState(null); // { cell, mode }
   const [result, setResult] = useState('');
+  const [questNotice, setQuestNotice] = useState('');
 
   const meId = map?.me?.id;
   const targets = useMemo(() => (map ? attackTargets(map.cells, meId) : new Set()), [map, meId]);
@@ -25,6 +26,7 @@ export default function MapView() {
 
   function handleCellClick(cell) {
     setResult('');
+    setQuestNotice('');
     const mine = cell.ownerMemberId === meId;
     if (mine && cell.unitType) {
       setSelected({ cell, mode: 'defend' });
@@ -36,6 +38,9 @@ export default function MapView() {
   async function handleDeployed(deploy) {
     setSelected(null);
     if (deploy?.result) setResult(deploy.result);
+    setQuestNotice(deploy?.questCompleted
+      ? `Quest complete! +${deploy.questCompleted.reward} coins · ${deploy.questCompleted.title}`
+      : '');
     await refreshMap();
     await refresh();
   }
@@ -46,6 +51,7 @@ export default function MapView() {
         <h1 className="text-2xl font-semibold">Map</h1>
         <span className="text-sm text-slate-600">Tap a highlighted cell to ATTACK, or your own cell to DEFEND.</span>
         {result && <span className="text-sm font-medium text-emerald-700">Last action: {RESULT_LABEL[result] ?? result}</span>}
+        {questNotice && <span className="text-sm font-semibold text-amber-700">{questNotice}</span>}
         {error && <span className="text-sm text-red-700">Couldn't refresh — retrying...</span>}
       </Card>
 

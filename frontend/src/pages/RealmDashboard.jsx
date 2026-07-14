@@ -1,13 +1,16 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router';
 import Card from '../components/ui/Card.jsx';
+import DailyQuestCard from '../components/ui/DailyQuestCard.jsx';
 import MapBoard from '../components/map/MapBoard.jsx';
 import { useGame } from '../components/GameContext.jsx';
 import { useMapPolling } from '../hooks/useMapPolling.js';
+import { useMidnightRefresh } from '../hooks/useMidnightRefresh.js';
 import { UNIT_META, standings } from '../components/map/mapModel.js';
 
 export default function RealmDashboard() {
-  const { realm, season } = useGame();
+  const { realm, season, dailyQuest, refresh } = useGame();
+  useMidnightRefresh(refresh);
   const { map } = useMapPolling(4000);
 
   const board = map?.me ? map : null;
@@ -35,6 +38,7 @@ export default function RealmDashboard() {
       </Card>
 
       <div className="space-y-4">
+        <DailyQuestCard quest={dailyQuest} />
         <Card>
           <h2 className="font-semibold">Me</h2>
           {me ? (

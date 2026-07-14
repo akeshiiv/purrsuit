@@ -1,5 +1,6 @@
 import {
   actionsFor,
+  advanceMockQuest,
   bumpVersion,
   clone,
   mockError,
@@ -26,10 +27,12 @@ export async function buy(unitType) {
   state.me.units[key] += 1;
   bumpVersion();
 
+  const quest = advanceMockQuest('shop.buy');
   return clone({
     coins: state.me.coins,
     units: state.me.units,
     actions: actionsFor(),
+    ...(quest.questCompleted ? { questCompleted: quest.questCompleted } : {}),
   });
 }
 
