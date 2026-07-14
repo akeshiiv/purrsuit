@@ -2,6 +2,7 @@ import { sql, withTransaction } from '../../db.js';
 import { RealmError, ensureSeasonFresh } from '../realms/service.js';
 import { computeActions } from '../realms/rules.js';
 import { isUnitType, neighbourCoords, resolveAttack } from './rules.js';
+import { evaluateQuest } from '../quests/service.js';
 
 const DEFAULT_COLOUR = '#3b82f6';
 
@@ -268,11 +269,25 @@ export async function attack(userId, input = {}) {
 
     await bumpSeasonVersion(tx, seasonId);
 
+    const quest = await evaluateQuest(tx, {
+      userId,
+      realmId,
+      seasonId,
+      memberId,
+      event: 'attack',
+      data: {
+        result: outcome.result,
+        priorOwnerMemberId: cell.owner_member_id != null ? toInt(cell.owner_member_id) : null,
+      },
+      now: new Date(),
+    });
+
     return {
       ok: true,
       result: outcome.result,
       cell: await selectCellPayload(tx, cell.id),
       units: unitsPayload(updatedRows[0]),
+      ...(quest.questCompleted ? { questCompleted: quest.questCompleted } : {}),
     };
   });
 }
@@ -347,10 +362,21 @@ export async function defend(userId, input = {}) {
 
     await bumpSeasonVersion(tx, seasonId);
 
+    const quest = await evaluateQuest(tx, {
+      userId,
+      realmId,
+      seasonId,
+      memberId,
+      event: 'defend',
+      data: {},
+      now: new Date(),
+    });
+
     return {
       ok: true,
       cell: await selectCellPayload(tx, cell.id),
       units: unitsPayload(updatedRows[0]),
+      ...(quest.questCompleted ? { questCompleted: quest.questCompleted } : {}),
     };
   });
 }
