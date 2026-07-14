@@ -3,6 +3,7 @@ import { computeActions } from '../realms/rules.js';
 import { RealmError, ensureSeasonFresh } from '../realms/service.js';
 import { validateAndComputeAward } from '../coins.js';
 import { evaluateQuest } from '../quests/service.js';
+import { normalizeTz, buildStatBlock, computeStreak } from './stats.js';
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -98,4 +99,74 @@ export async function completeStudy(userId, input = {}) {
       ...(quest.questCompleted ? { questCompleted: quest.questCompleted } : {}),
     };
   });
+}
+
+// Aggregate the user's logged sessions into lifetime + current-season stats and
+// a global study streak. Read-only: intentionally does NOT call
+// ensureSeasonFresh, so a GET never mutates season state. `tzInput` buckets
+// sessions into local calendar days for the streak/per-day metrics.
+export async function getStudyStats(userId, tzInput) {
+  const tz = normalizeTz(tzInput);
+
+  // The user's current active season, if any (season block scopes to it).
+  const seasonRows = await sql`
+    SELECT s.id AS season_id
+    FROM realm_members rm
+    JOIN realms r ON r.id = rm.realm_id
+    JOIN seasons s ON s.id = r.current_season_id
+    WHERE rm.user_id = ${userId} AND s.status = 'active'
+    LIMIT 1
+  `;
+  const seasonId = seasonRows[0]?.season_id ?? null;
+
+  const [allTimeRows, dayRows, todayRows, seasonRows2] = await Promise.all([
+    sql`
+      SELECT
+        COALESCE(SUM(duration), 0)::int AS total_seconds,
+        COUNT(*)::int AS session_count,
+        COALESCE(SUM(coins_earned), 0)::int AS total_coins,
+        COUNT(DISTINCT (created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date)::int AS active_days
+      FROM sessions
+      WHERE user_id = ${userId}
+    `,
+    sql`
+      SELECT to_char((created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS day
+      FROM sessions
+      WHERE user_id = ${userId}
+      GROUP BY day
+      ORDER BY day
+    `,
+    sql`SELECT to_char((now() AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS today`,
+    seasonId == null
+      ? Promise.resolve([])
+      : sql`
+        SELECT
+          COALESCE(SUM(duration), 0)::int AS total_seconds,
+          COUNT(*)::int AS session_count,
+          COALESCE(SUM(coins_earned), 0)::int AS total_coins,
+          COUNT(DISTINCT (created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date)::int AS active_days
+        FROM sessions
+        WHERE user_id = ${userId} AND season_id = ${seasonId}
+      `,
+  ]);
+
+  const allTime = allTimeRows[0];
+  const days = dayRows.map((r) => r.day);
+  const today = todayRows[0].today;
+
+  return {
+    streak: computeStreak(days, today),
+    allTime: buildStatBlock({
+      totalSeconds: allTime.total_seconds,
+      sessionCount: allTime.session_count,
+      totalCoins: allTime.total_coins,
+      activeDays: allTime.active_days,
+    }),
+    season: seasonId == null ? null : buildStatBlock({
+      totalSeconds: seasonRows2[0].total_seconds,
+      sessionCount: seasonRows2[0].session_count,
+      totalCoins: seasonRows2[0].total_coins,
+      activeDays: seasonRows2[0].active_days,
+    }),
+  };
 }

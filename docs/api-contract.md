@@ -81,6 +81,17 @@ Referenced by the endpoints below.
   "questDate": "2026-07-14" }
 ```
 
+```jsonc
+// StudyStats  (GET /api/study/stats)
+{ "streak": { "current": 5, "longest": 12 },
+  "allTime": StatBlock,
+  "season": StatBlock | null }
+
+// StatBlock
+{ "totalSeconds": 126000, "sessionCount": 42, "totalCoins": 8400,
+  "avgSessionSeconds": 3000, "activeDays": 18, "avgSecondsPerActiveDay": 7000 }
+```
+
 ---
 
 ## Profile
@@ -236,6 +247,30 @@ Award = `durationMinutes × 4`, applied atomically to the member's balance and s
 |---|---|---|
 | 409 | `NOT_IN_ACTIVE_SEASON` | user is not in a realm with an active season |
 | 400 | `INVALID_DURATION` | durationMinutes not an integer in 5–120 |
+
+### `GET /api/study/stats?tz=<IANA>`
+Aggregated study statistics for the current user, over two fixed scopes.
+
+- `tz` (optional): IANA time zone (e.g. `America/Los_Angeles`) used to bucket
+  sessions into local calendar days for the streak and per-day metrics. Missing
+  or invalid → `UTC`. The frontend sends `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+
+Read-only: no side effects (does not roll seasons over).
+
+**Response 200** — `StudyStats`
+```json
+{ "streak": { "current": 5, "longest": 12 },
+  "allTime": { "totalSeconds": 126000, "sessionCount": 42, "totalCoins": 8400,
+               "avgSessionSeconds": 3000, "activeDays": 18, "avgSecondsPerActiveDay": 7000 },
+  "season":  { "totalSeconds": 9000, "sessionCount": 3, "totalCoins": 600,
+               "avgSessionSeconds": 3000, "activeDays": 2, "avgSecondsPerActiveDay": 4500 } }
+```
+
+- `allTime` covers every session the user ever logged (all realms/seasons).
+- `season` covers only the user's current active season; `null` when the user is
+  not in a realm with an active season.
+- `streak` is global/lifetime (survives season resets); `current` stays alive
+  while the last study day is today or yesterday.
 
 ---
 
