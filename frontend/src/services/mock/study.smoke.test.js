@@ -33,3 +33,10 @@ test('mock terminate rejects an unknown reason', async () => {
     /reason/i,
   );
 });
+
+test('mock terminate rejects a bad duration (parity with the real endpoint)', async () => {
+  await assert.rejects(
+    () => mockStudy.terminate({ durationMinutes: 3, reason: 'social-media', summary: '', justification: '' }),
+    /duration/i,
+  );
+});
