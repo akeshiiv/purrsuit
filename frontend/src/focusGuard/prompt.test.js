@@ -28,8 +28,8 @@ test('parseVerdict falls back to a safe focused verdict on garbage', () => {
   assert.equal(v.reason, 'focused');
 });
 
-test('parseVerdict coerces an unknown category to other-distraction only when explicitly distracted', () => {
+test('parseVerdict falls back to a safe focused verdict for an unlisted category', () => {
   const v = parseVerdict('{"category":"tiktok","summary":"short videos","justification":"entertainment app"}');
-  // unknown category is not in the allow-list -> safe focused fallback
+  // unknown category is not in the allow-list -> safe focused fallback, never a fabricated distraction
   assert.equal(v.distracted, false);
 });
