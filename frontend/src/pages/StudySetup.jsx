@@ -9,7 +9,7 @@ const PRESETS = [25, 50, 60];
 
 export default function StudySetup() {
   const navigate = useNavigate();
-  const { me } = useGame();
+  const { me, realm } = useGame();
   const [duration, setDuration] = useState(25);
 
   const canStudy = me.actions?.canStudy ?? true;
@@ -58,6 +58,13 @@ export default function StudySetup() {
             Fine, I'll shop →
           </Link>
         </div>
+      )}
+
+      {realm?.antiCheatEnabled && (
+        <p className="rounded border border-sky-300 bg-sky-50 p-3 text-xs text-sky-900">
+          Focus Guard is on for this realm. You'll be asked to share your screen; it's
+          checked on-device for distractions and is required to earn coins this session.
+        </p>
       )}
     </Card>
   );
