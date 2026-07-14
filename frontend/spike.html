@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Focus Guard — Model Spike</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #0f172a; }
+      h1 { font-size: 1.4rem; }
+      .row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: 1rem 0; }
+      select, button { padding: .4rem .6rem; font-size: .9rem; }
+      #status { font-size: .85rem; color: #475569; }
+      #drop { border: 2px dashed #94a3b8; border-radius: 8px; padding: 2rem; text-align: center; color: #64748b; cursor: pointer; }
+      #drop.hot { border-color: #2563eb; background: #eff6ff; }
+      .card { border: 1px solid #e2e8f0; border-radius: 8px; padding: .75rem 1rem; margin: .75rem 0; font-size: .9rem; }
+      .card img { max-height: 90px; float: right; border-radius: 4px; margin-left: 1rem; }
+      code { background: #f1f5f9; padding: 0 .3rem; border-radius: 3px; }
+      .yes { color: #b91c1c; font-weight: 600; }
+      .no { color: #15803d; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Focus Guard — Model Spike</h1>
+    <p>
+      Validates an on-device vision model on real screenshots, exercising the real
+      transformers.js WebGPU worker + Focus Guard's prompt and verdict parser. Needs a
+      WebGPU browser (Chrome/Edge). First load downloads model weights (~0.3–1&nbsp;GB) to
+      IndexedDB, then caches. Drop a mix of clearly-studying and clearly-distracting
+      screens; watch the <code>distracted</code> verdict, the summary/justification, and latency.
+    </p>
+    <div class="row">
+      <label>Model:
+        <select id="model">
+          <option value="onnx-community/FastVLM-0.5B-ONNX">FastVLM-0.5B (capable tier)</option>
+          <option value="HuggingFaceTB/SmolVLM-256M-Instruct">SmolVLM-256M (constrained tier)</option>
+          <option value="HuggingFaceTB/SmolVLM-500M-Instruct">SmolVLM-500M</option>
+        </select>
+      </label>
+      <label>dtype:
+        <select id="dtype">
+          <option value="q4">q4</option>
+          <option value="fp16">fp16</option>
+          <option value="q8">q8</option>
+        </select>
+      </label>
+      <button id="load" type="button">Load model</button>
+      <span id="status">idle — pick a model and load</span>
+    </div>
+    <div id="drop">Drop screenshots here (or click to pick)</div>
+    <input id="file" type="file" accept="image/*" multiple hidden />
+    <div id="results"></div>
+    <script type="module" src="/src/spike.js"></script>
+  </body>
+</html>
