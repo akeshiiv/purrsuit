@@ -24,6 +24,11 @@ export function transition(state, event) {
     case 'MODEL_READY':
       if (state.status !== 'warming') return state;
       return { ...state, status: 'monitoring' };
+    case 'ENGINE_FAILED':
+      // Engine/model init failed after consent (or before) — the session can't
+      // be monitored, so run it uncredited rather than stranding it in warming.
+      if (state.status !== 'warming' && state.status !== 'awaiting-consent') return state;
+      return { ...state, status: 'running-uncredited' };
     case 'STREAM_ENDED':
       if (!RUNNING.has(state.status)) return state;
       return { ...state, status: 'running-uncredited' };

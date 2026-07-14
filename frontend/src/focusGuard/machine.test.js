@@ -70,3 +70,13 @@ test('stopping the share mid-session blocks credit', () => {
   ]);
   assert.equal(shouldComplete(s), false);
 });
+
+test('engine failure after consent leaves warming for uncredited (never stuck)', () => {
+  const s = drive([
+    { type: 'CONSENT_GRANTED' },   // -> warming
+    { type: 'ENGINE_FAILED' },     // engine/model init failed -> running-uncredited
+    { type: 'COUNTDOWN_ZERO' },
+  ]);
+  assert.equal(s.status, 'uncredited');
+  assert.equal(shouldComplete(s), false);
+});

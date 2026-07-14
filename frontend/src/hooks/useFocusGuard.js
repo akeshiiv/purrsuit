@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initState, transition, shouldComplete } from '../focusGuard/machine.js';
 import { createScheduler } from '../focusGuard/scheduler.js';
 import { createCaptureController } from '../focusGuard/capture.js';
@@ -30,6 +30,11 @@ export function useFocusGuard({ enabled, durationMinutes }) {
     refs.current.detector?.dispose();
   }, []);
 
+  // Tear down the stream, worker, and scheduler on unmount — cancel, back
+  // navigation, or leaving the page any other way than countdown/terminate —
+  // so the screen-share never keeps capturing after the user has left.
+  useEffect(() => cleanup, [cleanup]);
+
   const runCapture = useCallback(async () => {
     const { capture, detector } = refs.current;
     if (!capture || !detector) return;
@@ -51,7 +56,7 @@ export function useFocusGuard({ enabled, durationMinutes }) {
   const consent = useCallback(async () => {
     try {
       const capture = createCaptureController();
-      capture.onEnded(() => dispatch({ type: 'STREAM_ENDED' }));
+      capture.onEnded(() => { dispatch({ type: 'STREAM_ENDED' }); cleanup(); });
       await capture.start();
       refs.current.capture = capture;
       dispatch({ type: 'CONSENT_GRANTED' });
@@ -70,9 +75,16 @@ export function useFocusGuard({ enabled, durationMinutes }) {
       refs.current.scheduler = scheduler;
       scheduler.start();
     } catch {
-      dispatch({ type: 'CONSENT_DENIED' });
+      // Failure before consent (share denied) leaves status at awaiting-consent;
+      // failure after (engine/model init threw or the worker rejected `ready`)
+      // leaves it at warming, where only ENGINE_FAILED can move the machine.
+      // Both run the session uncredited; cleanup stops any live share/worker.
+      dispatch(stateRef.current.status === 'warming'
+        ? { type: 'ENGINE_FAILED' }
+        : { type: 'CONSENT_DENIED' });
+      cleanup();
     }
-  }, [dispatch, durationMinutes, runCapture]);
+  }, [dispatch, cleanup, durationMinutes, runCapture]);
 
   const onCountdownZero = useCallback(() => {
     const next = dispatch({ type: 'COUNTDOWN_ZERO' });
