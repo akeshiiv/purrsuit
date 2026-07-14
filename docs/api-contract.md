@@ -72,6 +72,13 @@ Referenced by the endpoints below.
 // LeaderboardRow
 { "userId": 1, "name": "player1", "colour": "#3b82f6", "territories": 67,
   "battlesWon": 12, "secondsStudied": 126000, "cellsA": 30, "cellsB": 20, "cellsC": 17 }
+
+// DailyQuest  (embedded in GET /api/realms/current; null when today's quest is done)
+{ "key": "buy_all_three", "title": "Cat Collector",
+  "description": "Purchase all 3 cat unit types today",
+  "reward": 100,
+  "progress": { "current": 2, "target": 3 },   // null for instant quests
+  "questDate": "2026-07-14" }
 ```
 
 ```jsonc
@@ -169,9 +176,12 @@ Everything the realm dashboard needs. If the user is in no realm, returns `{ "re
   "season": { "...": "Season" },
   "me": { "...": "Member", "actions": { "canStudy": true, "canBuy": false, "mustBuy": false, "canDeploy": true } },
   "members": [ { "...": "Member (public fields only for others)" } ],
-  "miniLeaderboard": [ { "...": "LeaderboardRow" } ]
+  "miniLeaderboard": [ { "...": "LeaderboardRow" } ],
+  "dailyQuest": { "...": "DailyQuest" }
 }
 ```
+
+`dailyQuest` is the player's quest for the current SGT day (a `DailyQuest`), or `null` once today's quest is completed (the dashboard card removes itself). Assignment is lazy: the first read on a new SGT day assigns a fresh random quest. Completing a quest awards **100 coins** to the member's season balance.
 
 ### `POST /api/realms/leave`
 Leave the current realm. Forfeits all owned territory for the season. If the admin leaves, the earliest-joined member is promoted; if the last member leaves, the realm is deleted.
@@ -231,6 +241,8 @@ Credit coins for a fully completed study session. The client calls this **only**
 ```
 Award = `durationMinutes × 4`, applied atomically to the member's balance and study stats.
 
+**Optional `questCompleted`** — present only when this action completed the day's quest: `{ "key": "study_exact_67", "title": "Precision Focus", "reward": 100 }`. When present on `/study/complete` and `/shop/buy`, the response `coins` and `actions` already include the +100 bonus.
+
 | Status | Code | When |
 |---|---|---|
 | 409 | `NOT_IN_ACTIVE_SEASON` | user is not in a realm with an active season |
@@ -274,6 +286,8 @@ Buy one Cat Unit for 100 coins. Atomic and guarded by both funds and the 6-unit 
 { "coins": 67, "units": { "a": 3, "b": 0, "c": 1 },
   "actions": { "canStudy": true, "canBuy": false, "mustBuy": false, "canDeploy": true } }
 ```
+
+**Optional `questCompleted`** — present only when this action completed the day's quest: `{ "key": "study_exact_67", "title": "Precision Focus", "reward": 100 }`. When present on `/study/complete` and `/shop/buy`, the response `coins` and `actions` already include the +100 bonus.
 
 | Status | Code | When |
 |---|---|---|
@@ -332,6 +346,8 @@ Deploy units from inventory to a neutral or enemy cell adjacent to a cell you ow
 ```
 `result ∈ "claimed" | "captured" | "repelled"`.
 
+**Optional `questCompleted`** — present only when this action completed the day's quest: `{ "key": "study_exact_67", "title": "Precision Focus", "reward": 100 }`. When present on `/study/complete` and `/shop/buy`, the response `coins` and `actions` already include the +100 bonus.
+
 | Status | Code | When |
 |---|---|---|
 | 400 | `INVALID_TARGET` | target is not a regular cell |
@@ -347,6 +363,8 @@ Reinforce a cell you own by one troop, consuming one matching unit.
 ```json
 { "ok": true, "cell": { "...": "Cell", "troopCount": 6 }, "units": { "a": 1, "b": 0, "c": 1 } }
 ```
+
+**Optional `questCompleted`** — present only when this action completed the day's quest: `{ "key": "study_exact_67", "title": "Precision Focus", "reward": 100 }`. When present on `/study/complete` and `/shop/buy`, the response `coins` and `actions` already include the +100 bonus.
 
 | Status | Code | When |
 |---|---|---|

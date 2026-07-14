@@ -5,6 +5,7 @@ import {
   generateJoinCode,
   normalizeRealmSettings,
 } from './rules.js';
+import { getTodayQuest } from '../quests/service.js';
 
 const DEFAULT_COLOUR = '#3b82f6';
 const JOIN_CODE_RETRIES = 8;
@@ -300,6 +301,7 @@ async function dashboardPayload(userId, realmId) {
     me,
     members: members.map((member) => memberPayload(member)),
     miniLeaderboard: await miniLeaderboardRows(sql, realmId, row.season_id),
+    dailyQuest: await getTodayQuest(sql, userId),
   };
 }
 

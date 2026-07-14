@@ -41,7 +41,7 @@ export default function FocusSession() {
     try {
       const result = await studyService.complete({ durationMinutes: duration });
       await refresh();
-      setReward({ coins: result.coins, gained: duration * 4 });
+      setReward({ coins: result.coins, gained: duration * 4, questCompleted: result.questCompleted ?? null });
     } catch (caught) {
       setReward({ error: caught.message });
     }
@@ -81,6 +81,11 @@ export default function FocusSession() {
             <p className="text-2xl font-semibold text-emerald-300">Session complete</p>
             <p className="text-xl">+{reward?.gained} coins</p>
             <p className="text-sm text-slate-300">Balance: {reward?.coins} coins</p>
+            {reward?.questCompleted && (
+              <p className="text-lg font-semibold text-amber-300">
+                Quest complete! +{reward.questCompleted.reward} coins · {reward.questCompleted.title}
+              </p>
+            )}
           </>
         )}
         <Button onClick={() => navigate('/realm')}>Back to dashboard</Button>

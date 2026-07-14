@@ -87,6 +87,7 @@ function RequireRealm({ children }) {
         realm: game.realm,
         season: game.season,
         me: game.me,
+        dailyQuest: game.dailyQuest ?? null,
         refresh,
       }}
     >
