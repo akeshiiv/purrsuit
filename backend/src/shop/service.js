@@ -8,6 +8,7 @@ import {
   unitColumn,
   unitsPayload,
 } from './rules.js';
+import { evaluateQuest } from '../quests/service.js';
 
 // Resolve the caller's realm membership (one realm per user) and roll an expired
 // season over first, so coins/units always reflect the realm's live season (a
@@ -91,7 +92,8 @@ export async function buyUnit(userId, input = {}) {
           SET coins = coins - $1,
               ${column} = ${column} + 1
         WHERE realm_id = $2 AND user_id = $3
-        RETURNING coins::int AS coins,
+        RETURNING id AS member_id,
+                  coins::int AS coins,
                   units_a::int AS units_a,
                   units_b::int AS units_b,
                   units_c::int AS units_c`,
@@ -105,11 +107,23 @@ export async function buyUnit(userId, input = {}) {
       UPDATE seasons SET state_version = state_version + 1 WHERE id = ${season.id}
     `;
 
+    const quest = await evaluateQuest(tx, {
+      userId,
+      realmId,
+      seasonId: season.id,
+      memberId: Number(member.member_id),
+      event: 'shop.buy',
+      data: { unitType },
+      now: new Date(),
+    });
+
     const units = unitsPayload(member);
+    const coins = member.coins + quest.coinsAwarded;
     return {
-      coins: member.coins,
+      coins,
       units,
-      actions: computeActions(member),
+      actions: computeActions({ ...member, coins }),
+      ...(quest.questCompleted ? { questCompleted: quest.questCompleted } : {}),
     };
   });
 }

@@ -2,6 +2,7 @@ import { sql, withTransaction } from '../../db.js';
 import { computeActions } from '../realms/rules.js';
 import { RealmError, ensureSeasonFresh } from '../realms/service.js';
 import { validateAndComputeAward } from '../coins.js';
+import { evaluateQuest } from '../quests/service.js';
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -79,10 +80,22 @@ export async function completeStudy(userId, input = {}) {
       UPDATE seasons SET state_version = state_version + 1 WHERE id = ${season.id}
     `;
 
+    const quest = await evaluateQuest(tx, {
+      userId,
+      realmId,
+      seasonId: season.id,
+      memberId: member.id,
+      event: 'study.complete',
+      data: { durationMinutes: input.durationMinutes },
+      now: new Date(),
+    });
+
+    const coins = member.coins + quest.coinsAwarded;
     return {
-      coins: member.coins,
+      coins,
       secondsStudied: member.seconds_studied,
-      actions: computeActions(member),
+      actions: computeActions({ ...member, coins }),
+      ...(quest.questCompleted ? { questCompleted: quest.questCompleted } : {}),
     };
   });
 }
