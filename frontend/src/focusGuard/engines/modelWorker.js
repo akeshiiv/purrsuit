@@ -1,5 +1,10 @@
 import { AutoProcessor, AutoModelForImageTextToText, RawImage } from '@huggingface/transformers';
-import { SYSTEM_PROMPT, parseVerdict } from '../prompt.js';
+import {
+  CATEGORY_PROMPT, SUMMARY_PROMPT, JUSTIFICATION_PROMPT,
+  CATEGORY_MAX_TOKENS, PROSE_MAX_TOKENS,
+  parseCategory, buildVerdict,
+} from '../prompt.js';
+import { FOCUSED } from '../contract.js';
 
 // Conversational VLMs are NOT a `pipeline()` task in transformers.js v4 — there is
 // no 'image-text-to-text' pipeline, so they load as AutoProcessor + a generative
@@ -16,10 +21,10 @@ const isSmolVLM = (id) => /smolvlm|idefics/i.test(id);
 // SmolVLM's chat template iterates `content` as typed parts and emits the <image>
 // marker itself; FastVLM's (Qwen2 ChatML) interpolates `content` as a plain string,
 // so the marker has to be inline for LlavaProcessor to expand it.
-function buildPromptText(id) {
+function buildPromptText(id, prompt) {
   const content = isSmolVLM(id)
-    ? [{ type: 'image' }, { type: 'text', text: SYSTEM_PROMPT }]
-    : `<image>\n${SYSTEM_PROMPT}`;
+    ? [{ type: 'image' }, { type: 'text', text: prompt }]
+    : `<image>\n${prompt}`;
   return processor.apply_chat_template([{ role: 'user', content }], { add_generation_prompt: true });
 }
 
@@ -29,6 +34,15 @@ function buildInputs(id, text, image) {
   return isSmolVLM(id)
     ? processor(text, [image], { do_image_splitting: false })
     : processor(image, text);
+}
+
+// One image+prompt round trip, returning just the model's own continuation.
+async function ask(prompt, image, maxNewTokens) {
+  const inputs = await buildInputs(currentId, buildPromptText(currentId, prompt), image);
+  const generated = await model.generate({ ...inputs, max_new_tokens: maxNewTokens, do_sample: false });
+  // Drop the echoed prompt so only the generated text is returned.
+  const trimmed = generated.slice(null, [inputs.input_ids.dims.at(-1), null]);
+  return (processor.batch_decode(trimmed, { skip_special_tokens: true })[0] ?? '').trim();
 }
 
 function bitmapToImage(bitmap) {
@@ -57,12 +71,17 @@ self.onmessage = async (e) => {
     } else if (type === 'analyze') {
       const image = bitmapToImage(bitmap);
       bitmap.close?.();
-      const inputs = await buildInputs(currentId, buildPromptText(currentId), image);
-      const generated = await model.generate({ ...inputs, max_new_tokens: 128, do_sample: false });
-      // Drop the echoed prompt so only the model's own JSON reaches parseVerdict.
-      const trimmed = generated.slice(null, [inputs.input_ids.dims.at(-1), null]);
-      const decoded = processor.batch_decode(trimmed, { skip_special_tokens: true });
-      self.postMessage({ type: 'result', id, verdict: parseVerdict(decoded[0] ?? '') });
+      // Step 1: the category alone. One word, tiny token budget — nothing to truncate
+      // or escape, which is what made every JSON variant fail in the spike.
+      const category = parseCategory(await ask(CATEGORY_PROMPT, image, CATEGORY_MAX_TOKENS));
+      // Step 2: only a distraction needs prose, so the common path stays one call.
+      let summary = '';
+      let justification = '';
+      if (category && category !== FOCUSED) {
+        summary = await ask(SUMMARY_PROMPT, image, PROSE_MAX_TOKENS);
+        justification = await ask(JUSTIFICATION_PROMPT, image, PROSE_MAX_TOKENS);
+      }
+      self.postMessage({ type: 'result', id, verdict: buildVerdict(category, summary, justification) });
     }
   } catch (err) {
     self.postMessage({ type: 'error', id, message: err?.message ?? 'inference failed' });
