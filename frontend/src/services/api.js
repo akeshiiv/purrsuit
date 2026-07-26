@@ -1,9 +1,4 @@
-// Thin fetch wrapper that handles credentialed requests and CSRF.
-//
-// The API uses the double-submit cookie pattern: before a mutating request we
-// fetch a CSRF token (which also sets a signed cookie) and send it back in the
-// `x-csrf-token` header. The token is cached and reused; on a 403 (e.g. the cookie
-// rotated) we refetch once and retry.
+// thin fetch wrapper that handles credentialed requests and CSRF
 const API_URL = import.meta.env.VITE_API_URL;
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 

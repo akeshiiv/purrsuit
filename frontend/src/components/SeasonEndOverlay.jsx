@@ -88,7 +88,7 @@ export default function SeasonEndOverlay({ winnerName, rows = [], me, onAck, ack
               style={{ animationDelay: '240ms' }}
             >
               {victory
-                ? 'Most studious cat general this season!'
+                ? 'Congrats, you were the most locked in!'
                 : `${winnerName ?? 'Nobody'} won this season, GGWP!`}
             </p>
             {placement && (

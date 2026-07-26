@@ -7,7 +7,7 @@ export const PALETTE = {
   obstacle: '#3c3c44',
   gridline: '#f4f1ea',
   highlightRing: '#f59e0b', // valid cells to attack
-  homeRing: '#1f2937', // highlight home base
+  homeRing: '#1A1E24', // highlight home base
 };
 
 export const UNIT_META = {

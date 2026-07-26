@@ -20,7 +20,7 @@ export default function StudySetup() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">Study</h1>
         <p className="text-sm text-slate-600">
-          Pick your study session length. You earn 4 coins per 1 minute studied.
+          Pick your study session length! 1 minute studied = 4 coins earned.
         </p>
       </header>
 

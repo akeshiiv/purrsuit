@@ -7,9 +7,9 @@ import { useMapPolling } from '../hooks/useMapPolling.js';
 import { UNIT_META, attackTargets, cellKey } from '../components/map/mapModel.js';
 
 const RESULT_LABEL = {
-  claimed: 'Claimed the cell',
-  captured: 'Captured the cell',
-  repelled: 'Attack repelled',
+  claimed: 'Claimed cell',
+  captured: 'Captured cell',
+  repelled: 'Ineffective attack',
 };
 
 export default function MapView() {

@@ -86,7 +86,7 @@ export default function AccountSettings() {
   function askLeave() {
     setConfirm({
       title: 'Leave realm?',
-      message: 'You will forfeit all territories and cats. This cannot be undone. Do you really want to go? :(',
+      message: 'You will forfeit all territories and cats PERMANENTLY. Do you really want to go? :(',
       confirmLabel: 'Leave realm',
       run: async () => {
         await realmService.leave();
@@ -98,7 +98,7 @@ export default function AccountSettings() {
   function askEndSeason() {
     setConfirm({
       title: 'End the season now?',
-      message: 'The current leader is crowned immediately. Everyone starts over in a new season.',
+      message: 'Immediately crown the winner, and everyone starts over in a new season.',
       confirmLabel: 'End season',
       run: async () => {
         await realmService.endSeason(game.realm.id);

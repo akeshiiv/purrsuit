@@ -78,7 +78,7 @@ export default function FocusSession() {
           </>
         ) : (
           <>
-            <p className="text-2xl font-semibold text-emerald-300">Session complete</p>
+            <p className="text-2xl font-semibold text-emerald-300">Session complete!</p>
             <p className="text-xl">+{reward?.gained} coins</p>
             <p className="text-sm text-slate-300">Balance: {reward?.coins} coins</p>
             {reward?.questCompleted && (

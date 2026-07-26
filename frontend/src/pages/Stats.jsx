@@ -54,7 +54,7 @@ export default function Stats() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Study stats</h1>
+        <h1 className="text-2xl font-semibold">Study Stats</h1>
         <div className="ml-auto flex overflow-hidden rounded border text-sm">
           <button
             type="button"
@@ -84,7 +84,7 @@ export default function Stats() {
           <div>
             <p className="text-sm text-slate-500">Study streak</p>
             <p className="text-2xl font-semibold">
-              {stats.streak.current} {stats.streak.current === 1 ? 'day' : 'days'} in a row
+              {stats.streak.current} {stats.streak.current === 1 ? 'day' : 'days'} in a row!
             </p>
             <p className="text-xs text-slate-500">Longest: {stats.streak.longest} days</p>
           </div>
@@ -93,16 +93,16 @@ export default function Stats() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Stat label="Total study time" value={formatStudy(block.totalSeconds)} />
-        <Stat label="Avg per active day" value={formatStudy(block.avgSecondsPerActiveDay)} />
+        <Stat label="Average per day" value={formatStudy(block.avgSecondsPerActiveDay)} />
         <Stat label="Total sessions" value={block.sessionCount} />
-        <Stat label="Avg session" value={formatStudy(block.avgSessionSeconds)} />
+        <Stat label="Average session" value={formatStudy(block.avgSessionSeconds)} />
         <Stat label="Coins earned" value={block.totalCoins} />
         <Stat label="Days studied" value={block.activeDays} />
       </div>
 
       {block.sessionCount === 0 && (
         <p className="text-sm text-slate-500">
-          No sessions yet — finish a focus session to start building your streak.
+          Complete a study session to build your STREAK!
         </p>
       )}
     </div>
