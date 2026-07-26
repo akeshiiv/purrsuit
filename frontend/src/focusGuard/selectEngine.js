@@ -24,7 +24,8 @@ export async function selectEngine(env = defaultEnv()) {
     return { engine: 'prompt-api', model: null };
   }
   if (env.gpu) {
-    return { engine: 'webgpu', model: pickModel(env).modelId };
+    const { modelId, dtype } = pickModel(env);
+    return { engine: 'webgpu', model: modelId, dtype };
   }
   return { engine: 'none', model: null };
 }

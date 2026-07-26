@@ -2,7 +2,7 @@ import { emptyVerdict } from '../contract.js';
 
 // Runs the VLM in a Web Worker (mandatory — heavy WebGPU/WASM off the main
 // thread). The exact model-output message contract is validated in the spike.
-export function createTransformersDetector({ model, dtype = 'q4', onProgress } = {}) {
+export function createTransformersDetector({ model, dtype, onProgress } = {}) {
   const worker = new Worker(new URL('./modelWorker.js', import.meta.url), { type: 'module' });
   let seq = 0;
   const pending = new Map();

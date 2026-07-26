@@ -3,6 +3,15 @@
 // WebGPU worker via createTransformersDetector, so it validates the full pipeline —
 // model load, the Focus Guard prompt, and verdict parsing — on real screenshots.
 import { createTransformersDetector } from './focusGuard/engines/transformers.js';
+import { MODEL_REGISTRY } from './focusGuard/registry.js';
+
+// 'registry' measures exactly what production ships: the per-module dtype map from
+// the registry entry for this model. The scalar options exist for comparison.
+function resolveDtype(model, choice) {
+  if (choice !== 'registry') return choice;
+  const entry = Object.values(MODEL_REGISTRY).find((m) => m.modelId === model);
+  return entry?.dtype;
+}
 
 const el = (id) => document.getElementById(id);
 let detector = null;
@@ -13,10 +22,10 @@ function setStatus(msg) {
 
 el('load').addEventListener('click', async () => {
   const model = el('model').value;
-  const dtype = el('dtype').value;
+  const dtype = resolveDtype(model, el('dtype').value);
   detector?.dispose?.();
   detector = null;
-  setStatus(`loading ${model} (${dtype})…`);
+  setStatus(`loading ${model} (${JSON.stringify(dtype)})…`);
   const started = performance.now();
   const next = createTransformersDetector({
     model,
@@ -66,9 +75,9 @@ async function analyze(file) {
       why: ${v.justification || '—'}`;
   } catch (err) {
     card.innerHTML = `<img src="${url}" alt="" /><strong>${file.name}</strong> — error: ${err?.message || err}`;
-  } finally {
-    bitmap.close?.();
   }
+  // No close() here: analyzeFrame transfers the bitmap to the worker, which owns
+  // and releases it. Closing a transferred bitmap here only muddies the output.
 }
 
 el('file').addEventListener('change', (e) => {

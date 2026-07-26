@@ -5,12 +5,12 @@ import { createTransformersDetector } from './engines/transformers.js';
 const USE_MOCK = import.meta.env.VITE_FOCUS_GUARD_MOCK === 'true';
 
 // Builds the detector for a resolved engine. Mock overrides everything for dev.
-export function createDetector({ engine, model, onProgress } = {}) {
+export function createDetector({ engine, model, dtype, onProgress } = {}) {
   if (USE_MOCK) {
     const d = createMockDetector();
     return { ready: Promise.resolve(), analyzeFrame: d.analyzeFrame, dispose() {} };
   }
   if (engine === 'prompt-api') return createPromptApiDetector({ onProgress });
-  if (engine === 'webgpu') return createTransformersDetector({ model, onProgress });
+  if (engine === 'webgpu') return createTransformersDetector({ model, dtype, onProgress });
   return { ready: Promise.reject(new Error('no engine')), analyzeFrame: async () => null, dispose() {} };
 }
