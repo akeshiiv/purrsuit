@@ -34,6 +34,9 @@ export function transition(state, event) {
       return { ...state, status: 'running-uncredited' };
     case 'FRAME_ANALYZED': {
       if (state.status !== 'monitoring') return state;
+      // A verdict the parser could not read is a missing sample, not an observation of
+      // studying: it must not earn credit, and it must not clear corroboration either.
+      if (!event.verdict?.parsed) return state;
       const framesAnalyzed = state.framesAnalyzed + 1;
       if (!event.verdict?.distracted) {
         return { ...state, framesAnalyzed, consecutiveDistracted: 0 };

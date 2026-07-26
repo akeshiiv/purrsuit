@@ -34,5 +34,6 @@ export function parseVerdict(text) {
     reason: obj.category,
     summary: typeof obj.summary === 'string' ? obj.summary : '',
     justification: typeof obj.justification === 'string' ? obj.justification : '',
+    parsed: true,
   };
 }

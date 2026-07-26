@@ -16,6 +16,7 @@ export function createMockDetector({ verdicts = [] } = {}) {
         summary: next.summary ?? '',
         justification: next.justification ?? '',
         reason: next.reason ?? (next.distracted ? 'other' : 'focused'),
+        parsed: true,
       };
     },
   };
