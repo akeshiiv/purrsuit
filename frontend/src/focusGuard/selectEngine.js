@@ -23,9 +23,11 @@ export async function selectEngine(env = defaultEnv()) {
   if (await promptApiUsable(env.LanguageModel)) {
     return { engine: 'prompt-api', model: null };
   }
-  if (env.gpu) {
-    const { modelId, dtype } = pickModel(env);
-    return { engine: 'webgpu', model: modelId, dtype };
+  // A WebGPU device still needs to be big enough for the one model measured to work;
+  // pickModel returns null otherwise, which falls through to tier 3.
+  const picked = env.gpu ? pickModel(env) : null;
+  if (picked) {
+    return { engine: 'webgpu', model: picked.modelId, dtype: picked.dtype };
   }
   return { engine: 'none', model: null };
 }
