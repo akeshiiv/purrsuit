@@ -1,3 +1,7 @@
+// Load .env so `npm run migrate` picks up DATABASE_URL the same way the server
+// does (index.js gets it via src/config/env.js). Without this, run() connects
+// with no connection string and fails on auth rather than on a missing variable.
+import 'dotenv/config';
 import pg from 'pg';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
