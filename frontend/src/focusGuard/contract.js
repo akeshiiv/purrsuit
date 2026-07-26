@@ -9,3 +9,9 @@ export const FOCUSED = 'focused';
 export function emptyVerdict() {
   return { distracted: false, summary: '', justification: '', reason: FOCUSED, parsed: false };
 }
+
+// The model looked and saw studying. Same fields as emptyVerdict but `parsed: true`, so
+// this one counts as a monitored frame and can earn credit.
+export function focusedVerdict() {
+  return { distracted: false, summary: '', justification: '', reason: FOCUSED, parsed: true };
+}
