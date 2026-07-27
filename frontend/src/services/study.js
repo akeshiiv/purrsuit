@@ -15,3 +15,10 @@ export function getStats(tz) {
   const query = tz ? `?tz=${encodeURIComponent(tz)}` : '';
   return request(`/api/study/stats${query}`);
 }
+
+export function terminate(input) {
+  return request('/api/study/terminate', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}

@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useGame } from '../components/GameContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import { useFocusGuard } from '../hooks/useFocusGuard.js';
 import { studyService } from '../services/index.js';
 
 function formatTime(totalSeconds) {
@@ -22,8 +23,10 @@ function FocusShell({ children }) {
 export default function FocusSession() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { refresh } = useGame();
+  const { realm, refresh } = useGame();
   const duration = location.state?.duration ?? null;
+  const monitored = Boolean(realm?.antiCheatEnabled);
+  const guard = useFocusGuard({ enabled: monitored, durationMinutes: duration });
 
   const totalSeconds = (duration ?? 25) * 60;
   const endTimeRef = useRef(null);
@@ -37,7 +40,9 @@ export default function FocusSession() {
   const finishSession = useCallback(async () => {
     if (finishedRef.current) return;
     finishedRef.current = true;
+    const mayCredit = monitored ? guard.onCountdownZero() : true;
     setPhase('done');
+    if (!mayCredit) { setReward({ uncredited: true }); return; }
     try {
       const result = await studyService.complete({ durationMinutes: duration });
       await refresh();
@@ -45,10 +50,12 @@ export default function FocusSession() {
     } catch (caught) {
       setReward({ error: caught.message });
     }
-  }, [duration, refresh]);
+  }, [duration, refresh, monitored, guard]);
 
   useEffect(() => {
-    if (phase !== 'running') return undefined;
+    const countdownActive = phase === 'running'
+      && (!monitored || (guard.status !== 'awaiting-consent' && guard.status !== 'terminated'));
+    if (!countdownActive) return undefined;
     if (endTimeRef.current === null) {
       endTimeRef.current = Date.now() + totalSeconds * 1000;
     }
@@ -62,10 +69,38 @@ export default function FocusSession() {
     tick();
     const intervalId = window.setInterval(tick, 250);
     return () => window.clearInterval(intervalId);
-  }, [finishSession, phase, totalSeconds]);
+  }, [finishSession, phase, totalSeconds, monitored, guard.status]);
 
   if (duration == null) {
     return <Navigate replace to="/realm/study" />;
+  }
+
+  if (guard.status === 'terminated') {
+    return (
+      <FocusShell>
+        <p className="text-2xl font-semibold text-red-300">Session ended — distraction detected</p>
+        <p className="text-sm text-slate-300">{guard.verdict?.summary}</p>
+        <p className="text-sm text-amber-200">{guard.verdict?.justification}</p>
+        <p className="text-xs text-slate-400">No coins or study time were earned.</p>
+        <Button onClick={() => navigate('/realm')}>Back to dashboard</Button>
+      </FocusShell>
+    );
+  }
+
+  if (monitored && guard.status === 'awaiting-consent') {
+    return (
+      <FocusShell>
+        <p className="text-2xl font-semibold">Focus Guard is on — share your screen to earn</p>
+        <p className="max-w-md text-sm text-slate-300">
+          This realm checks your screen on-device for distractions. Share your screen to
+          start your session; nothing leaves your device, and it&rsquo;s required to earn coins.
+        </p>
+        <Button onClick={guard.consent}>Share screen &amp; start</Button>
+        <Button onClick={() => navigate('/realm')} variant="secondary">
+          Cancel
+        </Button>
+      </FocusShell>
+    );
   }
 
   if (phase === 'done') {
@@ -75,6 +110,13 @@ export default function FocusSession() {
           <>
             <p className="text-xl font-semibold text-red-300">Couldn&rsquo;t record your session</p>
             <p className="text-sm text-slate-300">{reward.error}</p>
+          </>
+        ) : reward?.uncredited ? (
+          <>
+            <p className="text-2xl font-semibold text-amber-300">Session complete</p>
+            <p className="text-sm text-slate-300">
+              No coins were earned — Focus Guard couldn&rsquo;t verify this session.
+            </p>
           </>
         ) : (
           <>

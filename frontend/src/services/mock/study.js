@@ -1,4 +1,16 @@
 import { actionsFor, advanceMockQuest, bumpVersion, clone, mockError, state } from './state.js';
+import { DISTRACTION_REASONS } from '../../focusGuard/contract.js';
+
+export async function terminate(input = {}) {
+  const minutes = Number(input.durationMinutes);
+  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) {
+    throw mockError('INVALID_DURATION', 'Study duration must be 5 to 120 minutes.', 400);
+  }
+  if (!DISTRACTION_REASONS.includes(input.reason)) {
+    throw mockError('INVALID_REASON', 'Unknown distraction reason.', 400);
+  }
+  return clone({ logged: true });
+}
 
 export async function complete(durationMinutes) {
   const payload = typeof durationMinutes === 'object'
