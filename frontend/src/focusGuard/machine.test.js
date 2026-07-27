@@ -41,9 +41,23 @@ test('a single distracted frame does NOT terminate', () => {
   assert.equal(s.consecutiveDistracted, 1);
 });
 
-test('two consecutive distracted frames terminate and expose the verdict', () => {
+// Two is not enough: the model spike measured a real arXiv abstract classified as
+// chat-nonacademic, and captures are ~5 minutes apart, so a student reading one paper
+// can plausibly be caught twice in a row on the same legitimate page.
+test('two consecutive distracted frames still do NOT terminate', () => {
   const s = drive([
     { type: 'CONSENT_GRANTED' }, { type: 'MODEL_READY' },
+    { type: 'FRAME_ANALYZED', verdict: distracted },
+    { type: 'FRAME_ANALYZED', verdict: distracted },
+  ]);
+  assert.equal(s.status, 'monitoring');
+  assert.equal(s.consecutiveDistracted, 2);
+});
+
+test('three consecutive distracted frames terminate and expose the verdict', () => {
+  const s = drive([
+    { type: 'CONSENT_GRANTED' }, { type: 'MODEL_READY' },
+    { type: 'FRAME_ANALYZED', verdict: distracted },
     { type: 'FRAME_ANALYZED', verdict: distracted },
     { type: 'FRAME_ANALYZED', verdict: distracted },
   ]);
@@ -106,6 +120,7 @@ test('an unparseable verdict does not reset the corroboration counter', () => {
     { type: 'CONSENT_GRANTED' }, { type: 'MODEL_READY' },
     { type: 'FRAME_ANALYZED', verdict: distracted },
     { type: 'FRAME_ANALYZED', verdict: emptyVerdict() },
+    { type: 'FRAME_ANALYZED', verdict: distracted },
     { type: 'FRAME_ANALYZED', verdict: distracted },
   ]);
   assert.equal(s.status, 'terminated');

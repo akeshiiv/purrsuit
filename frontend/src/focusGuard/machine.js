@@ -1,4 +1,9 @@
-export const CORROBORATION_THRESHOLD = 2;
+// Consecutive distracted verdicts required before terminating. Raised from 2 to 3 after
+// the model spike measured a false positive on a real arXiv abstract: captures are ~5
+// minutes apart, so two-in-a-row on one legitimately academic page is plausible, and
+// killing an honest session is the outcome this feature must never produce. The cost is
+// ~15 minutes rather than ~10 to catch a cheater.
+export const CORROBORATION_THRESHOLD = 3;
 
 export function initState() {
   return {
