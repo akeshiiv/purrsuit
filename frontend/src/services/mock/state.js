@@ -26,11 +26,13 @@ function makeRealm(overrides = {}) {
   };
 }
 
+const SEASON_LENGTH_DAYS = 7;
+
 function makeSeason(overrides = {}) {
   return {
     id: overrides.id ?? 12,
     status: 'active',
-    endsAt: '2026-07-05T00:00:00Z',
+    endsAt: new Date(Date.now() + SEASON_LENGTH_DAYS * 24 * 60 * 60 * 1000).toISOString(),
     stateVersion: 1,
     winnerName: null,
     ...overrides,
@@ -147,6 +149,9 @@ export const state = {
   season: makeSeason(),
   me: makeMe(),
   members: makeOtherMembers(),
+  // The most recently ended season, with the standings snapshotted at rollover.
+  // Drives the show-once end screen; null until a season has ended.
+  endedSeason: null,
   seasonAcked: false,
   dailyQuest: makeQuest(),
 };
@@ -280,7 +285,10 @@ export function resetCell(cell) {
 
 export function resetForRealm(realm, role = 'admin') {
   state.realm = realm;
-  state.season = makeSeason({ id: state.season.id + 1 });
+  state.season = makeSeason({
+    id: state.season.id + 1,
+    stateVersion: state.season.stateVersion + 1,
+  });
   state.me = makeMe({
     role,
     coins: 0,
@@ -292,8 +300,55 @@ export function resetForRealm(realm, role = 'admin') {
   });
   state.members = makeOtherMembers();
   state.cells = makeCells(state.realm.mapSize, state.me, state.members);
+  state.endedSeason = null;
   state.seasonAcked = false;
   state.dailyQuest = makeQuest();
+}
+
+// Mirror the backend's season rollover (realms/service.js rollCurrentSeason):
+// crown whoever leads on territory, snapshot the final standings, then start a
+// fresh ACTIVE season with territory, inventory and season stats reset. Anything
+// the backend stores on `users` rather than `realm_members` — the saved display
+// name and territory colour — is deliberately carried across; only per-season
+// state is cleared.
+export function rolloverSeason({ winnerName: declaredName } = {}) {
+  const standings = leaderboardRows();
+  const winner = (declaredName && standings.find(row => row.name === declaredName)) || standings[0] || null;
+
+  state.endedSeason = {
+    id: state.season.id,
+    endsAt: state.season.endsAt,
+    winnerName: winner?.name ?? declaredName ?? null,
+    rows: standings,
+  };
+
+  state.season = makeSeason({
+    id: state.season.id + 1,
+    // Keep the poll counter climbing across the boundary. Clients cache the last
+    // version they saw and the poll endpoints short-circuit on an exact match, so
+    // a counter that restarts can hand a stale client its own number back and
+    // freeze it on the season that just ended.
+    stateVersion: state.season.stateVersion + 1,
+  });
+  state.me = makeMe({
+    role: state.me.role,
+    coins: 0,
+    units: { a: 0, b: 0, c: 0 },
+    colour: state.profile.colour,
+    name: state.profile.name,
+    secondsStudied: 0,
+    battlesWon: 0,
+  });
+  state.members = makeOtherMembers().map(member => ({
+    ...member,
+    secondsStudied: 0,
+    battlesWon: 0,
+  }));
+  state.cells = makeCells(state.realm.mapSize, state.me, state.members);
+  state.seasonAcked = false;
+  state.dailyQuest = makeQuest();
+
+  return clone(state.endedSeason);
 }
 
 export function createRealm(settings) {

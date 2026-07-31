@@ -1,4 +1,4 @@
-import { bumpVersion, clone, leaderboardRows, state } from './state.js';
+import { clone, leaderboardRows, mockError, rolloverSeason, state } from './state.js';
 
 export async function get(since) {
   if (Number(since) === state.season.stateVersion) {
@@ -13,12 +13,33 @@ export async function get(since) {
   });
 }
 
+// Mirrors the backend's decideSeasonStatus: a rollover restarts play immediately,
+// so the realm's current season is active again by the time anyone polls. The
+// show-once end screen is driven by the most recently ended season until it is
+// acked — and its standings come from the rollover snapshot, because the live
+// leaderboard already describes the new (reset) season.
 export async function seasonStatus() {
+  if (!state.realm) {
+    throw mockError('NOT_IN_ACTIVE_SEASON', 'You are not in a realm with an active season.', 409);
+  }
+
+  const ended = state.endedSeason;
+  if (ended && !state.seasonAcked) {
+    return clone({
+      status: 'ended',
+      endsAt: ended.endsAt,
+      winnerName: ended.winnerName,
+      needsAck: true,
+      rows: ended.rows,
+    });
+  }
+
   return clone({
     status: state.season.status,
     endsAt: state.season.endsAt,
     winnerName: state.season.winnerName,
-    needsAck: state.season.status === 'ended' && !state.seasonAcked,
+    needsAck: false,
+    rows: [],
   });
 }
 
@@ -27,6 +48,10 @@ export async function seasonAck() {
   return { ok: true };
 }
 
+// Mock-only dev affordance: force the season to end with a chosen champion so the
+// victory/defeat screen can be previewed from the Leaderboard page. Rolls over
+// exactly like endSeason, so previewing never leaves the mock stuck between
+// seasons.
 export async function simulateSeasonEnd({ winnerName } = {}) {
   const standings = leaderboardRows();
   const targetName = winnerName ?? standings[0]?.name ?? null;
@@ -51,9 +76,15 @@ export async function simulateSeasonEnd({ winnerName } = {}) {
     }
   }
 
-  state.season.status = 'ended';
-  state.season.winnerName = winner?.name ?? targetName;
-  state.seasonAcked = false;
-  bumpVersion();
-  return clone({ season: state.season });
+  const ended = rolloverSeason({ winnerName: targetName });
+
+  return clone({
+    season: {
+      id: ended.id,
+      status: 'ended',
+      endsAt: ended.endsAt,
+      stateVersion: state.season.stateVersion,
+      winnerName: ended.winnerName,
+    },
+  });
 }

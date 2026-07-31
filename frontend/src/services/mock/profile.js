@@ -1,4 +1,4 @@
-import { bumpVersion, clone, profilePayload, state } from './state.js';
+import { bumpVersion, profilePayload, state } from './state.js';
 
 export async function get() {
   return profilePayload();
@@ -15,5 +15,5 @@ export async function update(profile) {
     });
   bumpVersion();
 
-  return clone({ ...state.profile, realm: state.realm });
+  return profilePayload();
 }
