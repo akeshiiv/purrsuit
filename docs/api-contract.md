@@ -30,7 +30,7 @@ All game logic is server-authoritative: coin awards, purchases, attack/defend re
 
 ## Polling & `state_version`
 
-The map and leaderboard are kept current by polling (no websockets). Each active season carries an integer `stateVersion` that increments on every state mutation. Poll endpoints accept `?since=<version>`:
+The map and leaderboard are kept current by polling (no websockets). Each active season carries an integer `stateVersion` that increments on every state mutation. A rollover carries the counter forward — the new season resumes from the ended season's value rather than restarting — so a client's cached `since` can never accidentally match a *different* season's version and miss the reset board. Poll endpoints accept `?since=<version>`:
 
 - If `since === stateVersion`, the response is the cheap short-circuit `{ "version": N, "changed": false }`.
 - Otherwise the full payload is returned with `"changed": true` and the current `version`.
@@ -389,9 +389,12 @@ Whether the season has ended and whether this player still needs to see the end 
 
 **Response 200**
 ```json
-{ "status": "ended", "endsAt": "2026-07-05T00:00:00Z", "winnerName": "player1", "needsAck": true }
+{ "status": "ended", "endsAt": "2026-07-05T00:00:00Z", "winnerName": "player1", "needsAck": true,
+  "rows": [ { "...": "LeaderboardRow" } ] }
 ```
 `needsAck` is true when the season has ended and this player has not yet dismissed the victory/defeat screen.
+
+`rows` are the **final standings of the ended season**, snapshotted at rollover and ordered by rank. A rollover resets territory and the member economy immediately, so `GET /api/realm/leaderboard` already reflects the *new* season — the end screen must read its standings from here. `rows` is `[]` whenever `needsAck` is false.
 
 ### `POST /api/realm/season-ack`
 Mark the just-ended season's end screen as seen (idempotent). After acking, the client routes the player back to realm selection.

@@ -115,8 +115,32 @@ async function latestEndedSeasonRow(realmId) {
   return rows[0] ?? null;
 }
 
+// The final standings snapshotted for a season when it rolled over, in rank
+// order. Read from `season_results` rather than recomputed, because the rollover
+// deletes that season's cells and resets the member economy in the same
+// transaction — there is nothing left to aggregate afterwards.
+async function finalStandings(seasonId) {
+  const rows = await sql`
+    SELECT sr.user_id,
+           u.name,
+           u.colour,
+           sr.territories,
+           sr.battles_won,
+           sr.seconds_studied,
+           sr.cells_a,
+           sr.cells_b,
+           sr.cells_c
+    FROM season_results sr
+    JOIN users u ON u.id = sr.user_id
+    WHERE sr.season_id = ${seasonId}
+    ORDER BY sr.rank ASC
+  `;
+  return rows.map(toLeaderboardRow);
+}
+
 // GET /api/realm/season-status — whether the season has ended and whether this
-// player still needs to see the victory/defeat screen.
+// player still needs to see the victory/defeat screen (and, when they do, the
+// ended season's final standings to show on it).
 export async function seasonStatus(userId) {
   const { realmId, ackedSeasonId } = await resolveLiveRealm(userId);
   const current = await currentSeasonRow(realmId);
@@ -124,6 +148,8 @@ export async function seasonStatus(userId) {
     throw new RealmError(409, 'NOT_IN_ACTIVE_SEASON', 'You are not in a realm with an active season.');
   }
   const ended = await latestEndedSeasonRow(realmId);
+  // Only fetch the snapshot when it can actually be shown.
+  const needsAck = Boolean(ended) && toInt(ackedSeasonId) !== toInt(ended.id);
 
   return decideSeasonStatus({
     current: {
@@ -133,7 +159,12 @@ export async function seasonStatus(userId) {
       winnerName: current.winner_name ?? null,
     },
     ended: ended
-      ? { id: toInt(ended.id), endsAt: iso(ended.ends_at), winnerName: ended.winner_name ?? null }
+      ? {
+        id: toInt(ended.id),
+        endsAt: iso(ended.ends_at),
+        winnerName: ended.winner_name ?? null,
+        rows: needsAck ? await finalStandings(ended.id) : [],
+      }
       : null,
     ackedSeasonId,
   });

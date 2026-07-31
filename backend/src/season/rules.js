@@ -30,6 +30,12 @@ export function toLeaderboardRow(row) {
 // is driven by the most-recently-ended season the member has not yet acked
 // (`realm_members.acked_season_id`): while one exists we surface it with
 // needsAck=true; otherwise we report the live active season.
+//
+// `rows` carries the ended season's FINAL standings (from the `season_results`
+// snapshot taken during rollover). The live leaderboard cannot supply them: the
+// same rollover wipes territory and zeroes the member economy, so by the time a
+// client sees needsAck the standings query already describes the new season.
+// Empty whenever there is nothing to acknowledge.
 export function decideSeasonStatus({ current, ended, ackedSeasonId }) {
   if (ended && toInt(ackedSeasonId) !== toInt(ended.id)) {
     return {
@@ -37,6 +43,7 @@ export function decideSeasonStatus({ current, ended, ackedSeasonId }) {
       endsAt: ended.endsAt,
       winnerName: ended.winnerName ?? null,
       needsAck: true,
+      rows: ended.rows ?? [],
     };
   }
 
@@ -45,5 +52,6 @@ export function decideSeasonStatus({ current, ended, ackedSeasonId }) {
     endsAt: current.endsAt,
     winnerName: current.winnerName ?? null,
     needsAck: false,
+    rows: [],
   };
 }

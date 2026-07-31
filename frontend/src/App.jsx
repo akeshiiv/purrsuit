@@ -144,6 +144,10 @@ function AuthLayout() {
       <main className="mx-auto max-w-5xl p-4">
         <Outlet />
       </main>
+      {/* App-wide so the season-end screen reaches the player wherever they are —
+          notably /account, where the admin ends the season. The focus-session
+          route sits outside this layout and stays uninterrupted. */}
+      <SeasonEndGate />
     </div>
   );
 }
@@ -163,7 +167,6 @@ function RealmLayout() {
           <Link to="/realm/stats">Stats</Link>
         </nav>
       </div>
-      <SeasonEndGate />
       <Outlet />
     </div>
   );

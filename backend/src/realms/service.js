@@ -341,9 +341,14 @@ async function rollCurrentSeason(tx, current, now) {
 
   const nextSeasonNumber = toInt(current.season_number) + 1;
   const nextEndsAt = addDays(now, toInt(current.season_length_days));
+  // Continue the realm's poll counter rather than restarting it at 1. Clients
+  // cache the last `stateVersion` they saw and the poll endpoints short-circuit
+  // on `since === stateVersion`; a counter that restarts can hand a stale client
+  // its own cached number back and freeze it on the season that just ended.
+  const nextStateVersion = toInt(endedRows[0].state_version) + 1;
   const newSeasonRows = await tx`
     INSERT INTO seasons (realm_id, season_number, started_at, ends_at, state_version)
-    VALUES (${current.realm_id}, ${nextSeasonNumber}, ${now}, ${nextEndsAt}, 1)
+    VALUES (${current.realm_id}, ${nextSeasonNumber}, ${now}, ${nextEndsAt}, ${nextStateVersion})
     RETURNING id, status, ends_at, state_version
   `;
   const newSeason = newSeasonRows[0];
@@ -425,6 +430,28 @@ export async function releaseTerritory(tx, memberId) {
         updated_at = now()
     WHERE owner_member_id = ${memberId}
   `;
+}
+
+// The caller's RealmSummary for embedding in other payloads (GET/PATCH
+// /api/profile), or null when they are not in a realm. Read-only: deliberately
+// does NOT roll an expired season over, so reading a profile never mutates
+// season state.
+export async function memberRealmSummary(userId) {
+  const rows = await sql`
+    SELECT r.id,
+           r.name,
+           r.join_code,
+           r.map_preset,
+           r.max_players::int AS max_players,
+           r.map_size::int AS map_size,
+           r.anticheat_enabled,
+           rm.role
+    FROM realm_members rm
+    JOIN realms r ON r.id = rm.realm_id
+    WHERE rm.user_id = ${userId}
+    LIMIT 1
+  `;
+  return rows[0] ? realmSummary(rows[0], rows[0].role) : null;
 }
 
 export async function ensureSeasonFresh(realmId) {

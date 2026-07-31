@@ -4,9 +4,9 @@ import {
   createRealm,
   currentRealmPayload,
   joinRealm,
-  leaderboardRows,
   mockError,
   resetCell,
+  rolloverSeason,
   state,
 } from './state.js';
 
@@ -68,18 +68,25 @@ export async function kick(id, userId) {
   return { ok: true };
 }
 
+// Crown the leader and roll straight into a fresh season, as the contract
+// specifies. The response describes the season that just ENDED; the realm is
+// already playing the new one by the time this returns.
 export async function endSeason() {
   if (state.me.role !== 'admin') {
     throw mockError('NOT_ADMIN', 'Only admins can end the season.', 403);
   }
 
-  const [winner] = leaderboardRows();
-  state.season.status = 'ended';
-  state.season.winnerName = winner?.name ?? null;
-  state.seasonAcked = false;
-  bumpVersion();
+  const ended = rolloverSeason();
 
-  return clone({ season: state.season });
+  return clone({
+    season: {
+      id: ended.id,
+      status: 'ended',
+      endsAt: ended.endsAt,
+      stateVersion: state.season.stateVersion,
+      winnerName: ended.winnerName,
+    },
+  });
 }
 
 export async function updateSettings(id, settings) {

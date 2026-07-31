@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { sql } from '../../db.js';
 import { authenticate } from '../middleware.js';
 import { validateProfilePatch, toProfile } from '../profile.js';
+import { memberRealmSummary } from '../realms/service.js';
 
 const router = Router();
 
@@ -13,8 +14,8 @@ function asyncHandler(handler) {
 
 router.use(authenticate);
 
-// GET /api/profile — the current user's profile. `realm` is null until the
-// realm feature is integrated (the realm summary is filled in by the caller).
+// GET /api/profile — the current user's profile, with their RealmSummary (or
+// null when they are in no realm).
 router.get('/profile', asyncHandler(async (req, res) => {
   const rows = await sql`
     SELECT id, name, email, avatar_url, colour FROM users WHERE id = ${req.user.id}
@@ -22,7 +23,7 @@ router.get('/profile', asyncHandler(async (req, res) => {
   if (!rows[0]) {
     return res.status(404).json({ error: 'USER_NOT_FOUND', message: 'No such user' });
   }
-  res.json(toProfile(rows[0]));
+  res.json(toProfile(rows[0], await memberRealmSummary(req.user.id)));
 }));
 
 // PATCH /api/profile — edit name, avatar, and/or colour. All fields optional;
@@ -44,7 +45,7 @@ router.patch('/profile', asyncHandler(async (req, res) => {
   if (!rows[0]) {
     return res.status(404).json({ error: 'USER_NOT_FOUND', message: 'No such user' });
   }
-  res.json(toProfile(rows[0]));
+  res.json(toProfile(rows[0], await memberRealmSummary(req.user.id)));
 }));
 
 export default router;
