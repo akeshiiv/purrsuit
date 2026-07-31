@@ -341,9 +341,14 @@ async function rollCurrentSeason(tx, current, now) {
 
   const nextSeasonNumber = toInt(current.season_number) + 1;
   const nextEndsAt = addDays(now, toInt(current.season_length_days));
+  // Continue the realm's poll counter rather than restarting it at 1. Clients
+  // cache the last `stateVersion` they saw and the poll endpoints short-circuit
+  // on `since === stateVersion`; a counter that restarts can hand a stale client
+  // its own cached number back and freeze it on the season that just ended.
+  const nextStateVersion = toInt(endedRows[0].state_version) + 1;
   const newSeasonRows = await tx`
     INSERT INTO seasons (realm_id, season_number, started_at, ends_at, state_version)
-    VALUES (${current.realm_id}, ${nextSeasonNumber}, ${now}, ${nextEndsAt}, 1)
+    VALUES (${current.realm_id}, ${nextSeasonNumber}, ${now}, ${nextEndsAt}, ${nextStateVersion})
     RETURNING id, status, ends_at, state_version
   `;
   const newSeason = newSeasonRows[0];

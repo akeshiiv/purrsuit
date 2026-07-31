@@ -30,7 +30,7 @@ All game logic is server-authoritative: coin awards, purchases, attack/defend re
 
 ## Polling & `state_version`
 
-The map and leaderboard are kept current by polling (no websockets). Each active season carries an integer `stateVersion` that increments on every state mutation. Poll endpoints accept `?since=<version>`:
+The map and leaderboard are kept current by polling (no websockets). Each active season carries an integer `stateVersion` that increments on every state mutation. A rollover carries the counter forward — the new season resumes from the ended season's value rather than restarting — so a client's cached `since` can never accidentally match a *different* season's version and miss the reset board. Poll endpoints accept `?since=<version>`:
 
 - If `since === stateVersion`, the response is the cheap short-circuit `{ "version": N, "changed": false }`.
 - Otherwise the full payload is returned with `"changed": true` and the current `version`.
