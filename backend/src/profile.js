@@ -63,9 +63,8 @@ export function validateProfilePatch(body) {
 }
 
 // Map a `users` row (snake_case columns) to the contract's Profile shape.
-// `realm` is the player's RealmSummary when known, or null. On the be-profile
-// branch the realm tables don't exist yet, so callers pass null; the realm
-// summary is populated once the realm feature is integrated.
+// `realm` is the player's RealmSummary, or null when they are in no realm
+// (routes/profile.js resolves it via realms/service.js memberRealmSummary).
 export function toProfile(row, realm = null) {
   return {
     id: row.id,

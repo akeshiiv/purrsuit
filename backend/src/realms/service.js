@@ -427,6 +427,28 @@ export async function releaseTerritory(tx, memberId) {
   `;
 }
 
+// The caller's RealmSummary for embedding in other payloads (GET/PATCH
+// /api/profile), or null when they are not in a realm. Read-only: deliberately
+// does NOT roll an expired season over, so reading a profile never mutates
+// season state.
+export async function memberRealmSummary(userId) {
+  const rows = await sql`
+    SELECT r.id,
+           r.name,
+           r.join_code,
+           r.map_preset,
+           r.max_players::int AS max_players,
+           r.map_size::int AS map_size,
+           r.anticheat_enabled,
+           rm.role
+    FROM realm_members rm
+    JOIN realms r ON r.id = rm.realm_id
+    WHERE rm.user_id = ${userId}
+    LIMIT 1
+  `;
+  return rows[0] ? realmSummary(rows[0], rows[0].role) : null;
+}
+
 export async function ensureSeasonFresh(realmId) {
   return withTransaction(async (tx) => {
     const current = await currentRealmSeasonRow(tx, realmId, { lock: true });
