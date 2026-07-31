@@ -389,9 +389,12 @@ Whether the season has ended and whether this player still needs to see the end 
 
 **Response 200**
 ```json
-{ "status": "ended", "endsAt": "2026-07-05T00:00:00Z", "winnerName": "player1", "needsAck": true }
+{ "status": "ended", "endsAt": "2026-07-05T00:00:00Z", "winnerName": "player1", "needsAck": true,
+  "rows": [ { "...": "LeaderboardRow" } ] }
 ```
 `needsAck` is true when the season has ended and this player has not yet dismissed the victory/defeat screen.
+
+`rows` are the **final standings of the ended season**, snapshotted at rollover and ordered by rank. A rollover resets territory and the member economy immediately, so `GET /api/realm/leaderboard` already reflects the *new* season — the end screen must read its standings from here. `rows` is `[]` whenever `needsAck` is false.
 
 ### `POST /api/realm/season-ack`
 Mark the just-ended season's end screen as seen (idempotent). After acking, the client routes the player back to realm selection.
