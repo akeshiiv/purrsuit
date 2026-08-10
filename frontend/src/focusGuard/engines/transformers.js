@@ -43,6 +43,15 @@ export function createTransformersDetector({ model, dtype, onProgress } = {}) {
         worker.postMessage({ type: 'analyze', id, bitmap }, [bitmap]);
       });
     },
-    dispose() { worker.terminate(); },
+    dispose() {
+      // Terminating mid-download or mid-inference means no reply is ever coming,
+      // so settle whoever is waiting before pulling the worker out from under
+      // them — an await on a promise that can never resolve pins the whole
+      // capture closure (and the caller's abort check never runs).
+      settleReady(rejectReady, new Error('focus guard disposed'));
+      pending.forEach((entry) => entry.resolve(null));
+      pending.clear();
+      worker.terminate();
+    },
   };
 }
