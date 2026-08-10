@@ -166,6 +166,8 @@ Join an existing realm by its 6-character code.
 | 409 | `REALM_FULL` | member count == maxPlayers |
 | 409 | `SEASON_ENDED` | the realm's current season has ended |
 
+A season whose `endsAt` has passed is rolled over as part of the join, so the new member lands on the season that replaces it. `SEASON_ENDED` is returned only when the realm is genuinely between seasons.
+
 ### `GET /api/realms/current`  *(poll 3–5 s)*
 Everything the realm dashboard needs. If the user is in no realm, returns `{ "realm": null }` with status 200.
 
@@ -220,13 +222,21 @@ Admin toggles anti-cheat. *(Anti-cheat behaviour is a deferred extension; this s
 | Status | Code | When |
 |---|---|---|
 | 403 | `NOT_ADMIN` | caller is not the realm admin |
+| 400 | `INVALID_REALM_SETTINGS` | `antiCheat` is absent or not a JSON boolean |
+
+`antiCheat` must be a real boolean — `true`/`false`, not `"true"`/`"false"`, and never omitted. It is a security setting, so a request that does not state it is rejected rather than read as "off".
 
 ---
 
 ## Study
 
-### `POST /api/study/complete`
-Credit coins for a fully completed study session. The client calls this **only** when the focus countdown naturally reaches zero — cancelling forfeits the reward and must not call this.
+Study sessions are **server-owned**. The client opens one before the countdown
+starts and claims it after: the reward is settled against the server's own row
+and clock, so a duration reported by the client buys nothing on its own.
+
+### `POST /api/study/start`
+Open a session and start the server-side clock. Call this as the focus countdown
+begins; the `sessionKey` it returns is the only handle to the session.
 
 **Request**
 ```json
@@ -236,17 +246,85 @@ Credit coins for a fully completed study session. The client calls this **only**
 
 **Response 200**
 ```json
-{ "coins": 167, "secondsStudied": 3600,
-  "actions": { "canStudy": false, "canBuy": true, "mustBuy": true, "canDeploy": false } }
+{ "sessionKey": "3f1c9d2e-4b7a-4c11-9d38-6a2e5c7b8091", "durationMinutes": 25,
+  "startedAt": "2026-07-31T10:00:00.000Z",
+  "eligibleAt": "2026-07-31T10:24:00.000Z",
+  "expiresAt":  "2026-07-31T10:39:00.000Z" }
 ```
-Award = `durationMinutes × 4`, applied atomically to the member's balance and study stats.
+- `eligibleAt` = `startedAt` + duration − 60 s of grace (client clock skew and
+  countdown rounding). Claiming before it fails.
+- `expiresAt` = `eligibleAt` + a 15-minute claim window. Claiming after it fails.
 
-**Optional `questCompleted`** — present only when this action completed the day's quest: `{ "key": "study_exact_67", "title": "Precision Focus", "reward": 100 }`. When present on `/study/complete` and `/shop/buy`, the response `coins` and `actions` already include the +100 bonus.
+A user has **one** live session at a time: starting a session abandons whatever
+was still pending, so overlapping timers cannot be stacked and claimed together.
 
 | Status | Code | When |
 |---|---|---|
-| 409 | `NOT_IN_ACTIVE_SEASON` | user is not in a realm with an active season |
 | 400 | `INVALID_DURATION` | durationMinutes not an integer in 5–120 |
+| 409 | `NOT_IN_ACTIVE_SEASON` | user is not in a realm with an active season |
+
+### `POST /api/study/complete`
+Claim a session opened by `/api/study/start`. Cancelling forfeits the reward, but
+that is now enforced rather than assumed: the server checks that its own clock
+has advanced past `eligibleAt`, that the session was never terminated, and that
+it has not already been paid.
+
+**Request**
+```json
+{ "sessionKey": "3f1c9d2e-4b7a-4c11-9d38-6a2e5c7b8091" }
+```
+`durationMinutes` is **not** read from the request — the award comes from the
+duration recorded when the session was opened.
+
+**Response 200**
+```json
+{ "coins": 167, "secondsStudied": 3600,
+  "actions": { "canStudy": false, "canBuy": true, "mustBuy": true, "canDeploy": false } }
+```
+Award = stored `durationMinutes × 4`, applied atomically to the member's balance
+and study stats.
+
+**Optional `alreadyCredited: true`** — present only when the session had already
+been claimed. Retrying a request whose response was lost is safe: it returns the
+balance the first claim banked and credits nothing further. Absent on a first
+claim, so branch on its presence.
+
+**Optional `questCompleted`** — present only when this action completed the day's quest: `{ "key": "study_exact_67", "title": "Precision Focus", "reward": 100 }`. When present on `/study/complete` and `/shop/buy`, the response `coins` and `actions` already include the +100 bonus. Never present on an `alreadyCredited` replay.
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `INVALID_SESSION` | sessionKey missing or not a uuid |
+| 409 | `STALE_CLIENT` | body carries the pre-session `durationMinutes` shape — the tab predates this deploy and must be reloaded |
+| 404 | `SESSION_NOT_FOUND` | no such session, or it belongs to another user |
+| 409 | `SESSION_TOO_EARLY` | claimed before `eligibleAt` — the time was not actually spent |
+| 409 | `SESSION_EXPIRED` | claimed after `expiresAt` |
+| 409 | `SESSION_NOT_CLAIMABLE` | session was terminated, or abandoned by a later start |
+| 409 | `NOT_IN_ACTIVE_SEASON` | user is not in a realm with an active season |
+| 400 | `INVALID_DURATION` | stored duration is outside 5–120 (should be impossible) |
+
+### `POST /api/study/terminate`
+Log a session ended by distraction and close it. Fire-and-forget: an unknown or
+already-closed `sessionKey` still logs.
+
+**Request**
+```json
+{ "sessionKey": "3f1c9d2e-4b7a-4c11-9d38-6a2e5c7b8091", "reason": "social-media",
+  "summary": "...", "justification": "..." }
+```
+- `sessionKey` optional. When it names a pending session owned by the caller,
+  that session is marked terminated — it can never be completed afterwards — and
+  the attempted duration is taken from the row.
+- `durationMinutes` (5–120) still accepted, and still required when no
+  `sessionKey` is sent.
+- `reason` one of `social-media`, `entertainment`, `chat-nonacademic`, `gaming`,
+  `shopping`, `other`. `summary`/`justification` optional, capped at 2000 chars.
+
+**Response 200** — `{ "logged": true }`
+
+| Status | Code | When |
+|---|---|---|
+| 400 | `INVALID_DURATION` | durationMinutes sent, or required, and not an integer in 5–120 |
+| 400 | `INVALID_REASON` | unknown distraction reason |
 
 ### `GET /api/study/stats?tz=<IANA>`
 Aggregated study statistics for the current user, over two fixed scopes.

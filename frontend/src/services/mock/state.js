@@ -154,6 +154,9 @@ export const state = {
   endedSeason: null,
   seasonAcked: false,
   dailyQuest: makeQuest(),
+  // Server-issued study sessions, mirroring the `study_sessions` table: the
+  // client can only claim coins for a key that was handed out by `start`.
+  studySessions: [],
 };
 
 state.cells = makeCells(state.realm.mapSize, state.me, state.members);
@@ -303,6 +306,7 @@ export function resetForRealm(realm, role = 'admin') {
   state.endedSeason = null;
   state.seasonAcked = false;
   state.dailyQuest = makeQuest();
+  state.studySessions = [];
 }
 
 // Mirror the backend's season rollover (realms/service.js rollCurrentSeason):

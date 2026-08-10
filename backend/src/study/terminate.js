@@ -1,5 +1,6 @@
 import { withTransaction } from '../../db.js';
 import { RealmError } from '../realms/service.js';
+import { normalizeSessionKey } from './service.js';
 
 const DISTRACTION_REASONS = new Set([
   'social-media', 'entertainment', 'chat-nonacademic', 'gaming', 'shopping', 'other',
@@ -12,15 +13,27 @@ function capText(value) {
 }
 
 export function validateTerminationInput(input = {}) {
-  const minutes = Number(input.durationMinutes);
-  if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) {
-    throw new RealmError(400, 'INVALID_DURATION', 'Study duration must be 5 to 120 minutes.');
+  const sessionKey = normalizeSessionKey(input?.sessionKey);
+  const claimsDuration = input?.durationMinutes !== undefined && input?.durationMinutes !== null;
+
+  // With a session key the authoritative duration is on the server row, so the
+  // field becomes optional. Without one it is all we have, and the old callers
+  // that still send it get the same validation they always did.
+  let durationSeconds = null;
+  if (claimsDuration || !sessionKey) {
+    const minutes = Number(input.durationMinutes);
+    if (!Number.isInteger(minutes) || minutes < 5 || minutes > 120) {
+      throw new RealmError(400, 'INVALID_DURATION', 'Study duration must be 5 to 120 minutes.');
+    }
+    durationSeconds = minutes * SECONDS_PER_MINUTE;
   }
+
   if (!DISTRACTION_REASONS.has(input.reason)) {
     throw new RealmError(400, 'INVALID_REASON', 'Unknown distraction reason.');
   }
   return {
-    durationSeconds: minutes * SECONDS_PER_MINUTE,
+    sessionKey,
+    durationSeconds,
     reason: input.reason,
     summary: capText(input.summary),
     justification: capText(input.justification),
@@ -34,6 +47,25 @@ export function validateTerminationInput(input = {}) {
 export async function logTermination(userId, input) {
   const v = validateTerminationInput(input);
   return withTransaction(async (tx) => {
+    // Close the server-owned session in the same transaction as the log. A
+    // session the user walked away from must stop being claimable at the moment
+    // it is reported, or the reward survives the distraction that ended it. The
+    // status guard makes this lose gracefully to a completion that got there
+    // first, and an unknown or already-closed key simply logs, since the client
+    // fires this off without waiting for an answer.
+    let durationSeconds = v.durationSeconds;
+    if (v.sessionKey) {
+      const closed = await tx`
+        UPDATE study_sessions
+        SET status = 'terminated'
+        WHERE session_key = ${v.sessionKey} AND user_id = ${userId} AND status = 'pending'
+        RETURNING duration_minutes::int AS duration_minutes
+      `;
+      if (closed[0]) {
+        durationSeconds = Number(closed[0].duration_minutes) * SECONDS_PER_MINUTE;
+      }
+    }
+
     const rows = await tx`
       SELECT rm.id AS realm_member_id, r.current_season_id AS season_id
       FROM realm_members rm
@@ -47,7 +79,7 @@ export async function logTermination(userId, input) {
       INSERT INTO focus_terminations
         (user_id, season_id, realm_member_id, attempted_duration_seconds, reason, summary, justification)
       VALUES
-        (${userId}, ${seasonId}, ${memberId}, ${v.durationSeconds}, ${v.reason}, ${v.summary}, ${v.justification})
+        (${userId}, ${seasonId}, ${memberId}, ${durationSeconds ?? 0}, ${v.reason}, ${v.summary}, ${v.justification})
     `;
     return { logged: true };
   });

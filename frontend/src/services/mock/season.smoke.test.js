@@ -52,7 +52,11 @@ test('studying is possible again after the season ends', async () => {
   await mockRealm.endSeason();
   // The old mock left status permanently 'ended', which locked the player out of
   // /study/complete forever with NOT_IN_ACTIVE_SEASON.
-  const result = await mockStudy.complete({ durationMinutes: 25 });
+  const started = await mockStudy.start({ durationMinutes: 25 });
+  // Backdate the row rather than sitting through the countdown; eligibility is
+  // the server's anti-replay check, not what this test is about.
+  state.studySessions.find(s => s.sessionKey === started.sessionKey).eligibleAt = Date.now() - 1000;
+  const result = await mockStudy.complete({ sessionKey: started.sessionKey });
   assert.equal(result.coins, 100);
 });
 

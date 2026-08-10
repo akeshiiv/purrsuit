@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware.js';
 import { RealmError } from '../realms/service.js';
-import { completeStudy, getStudyStats } from '../study/service.js';
+import { completeStudy, getStudyStats, startStudySession } from '../study/service.js';
 import { logTermination } from '../study/terminate.js';
 
 const router = Router();
@@ -13,6 +13,13 @@ function asyncHandler(handler) {
 }
 
 router.use(authenticate);
+
+// Opening a session is what makes completing one payable: the reward is settled
+// against the row this writes, not against anything the client reports later.
+router.post('/study/start', asyncHandler(async (req, res) => {
+  const payload = await startStudySession(req.user.id, req.body);
+  res.json(payload);
+}));
 
 router.post('/study/complete', asyncHandler(async (req, res) => {
   const payload = await completeStudy(req.user.id, req.body);
