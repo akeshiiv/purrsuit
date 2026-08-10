@@ -578,11 +578,33 @@ export async function joinRealm(userId, input = {}) {
       WHERE r.join_code = ${joinCode}
       FOR UPDATE OF r, s
     `;
-    const row = rows[0];
+    let row = rows[0];
     if (!row) {
       throw realmError(404, 'REALM_NOT_FOUND', 'No realm exists for that join code.');
     }
-    if (row.season_status !== 'active') {
+
+    // Nothing runs on a timer here: a season stays status='active' past its
+    // ends_at until a request rolls it over. Letting someone join that window
+    // drops them onto a board that resets out from under them the moment any
+    // member next polls. Close it out first — same boundary ensureSeasonFresh
+    // uses — so the new player lands on the season that replaces it rather than
+    // being turned away. The lock this transaction already holds covers the roll.
+    const now = new Date();
+    if (row.season_status === 'active' && now >= new Date(row.ends_at)) {
+      const current = await currentRealmSeasonRow(tx, row.id, { lock: true });
+      if (current) {
+        await rollCurrentSeason(tx, current, now);
+        const refreshed = await currentRealmSeasonRow(tx, row.id, { lock: true });
+        // currentRealmSeasonRow names the realm key realm_id; everything below
+        // reads it as `id`, so restore that alias rather than teach each caller.
+        if (refreshed) row = { ...refreshed, id: refreshed.realm_id };
+      }
+    }
+
+    // Authoritative under the lock. Covers both a realm parked between seasons
+    // and the case where the rollover above declined to run (another transaction
+    // beat us to the season, so rollCurrentSeason found nothing left to end).
+    if (row.season_status !== 'active' || new Date(row.ends_at) <= now) {
       throw realmError(409, 'SEASON_ENDED', 'This realm is between active seasons.');
     }
 
@@ -749,9 +771,18 @@ export async function updateRealmSettings(userId, realmId, input = {}) {
       throw realmError(403, 'NOT_ADMIN', 'Only the realm admin can do that.');
     }
 
+    // Anti-cheat is a security control, so the flag has to be stated, not
+    // guessed at. Coercing with Boolean() read the string "false" as ON and — far
+    // worse — read a request that simply omitted the field as a deliberate OFF,
+    // letting a malformed or truncated PATCH silently disarm the realm. Same
+    // strictness normalizeRealmSettings applies to antiCheat at creation time.
+    if (typeof input.antiCheat !== 'boolean') {
+      throw realmError(400, 'INVALID_REALM_SETTINGS', 'antiCheat must be true or false.');
+    }
+
     const rows = await tx`
       UPDATE realms
-      SET anticheat_enabled = ${Boolean(input.antiCheat)}
+      SET anticheat_enabled = ${input.antiCheat}
       WHERE id = ${realmId}
       RETURNING *
     `;
