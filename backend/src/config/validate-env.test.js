@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { loadConfig, REQUIRED_VARS } from './validate-env.js';
+import { loadConfig, REQUIRED_VARS, RATE_LIMIT_STORES } from './validate-env.js';
 
 const FULL_ENV = {
   JWT_SECRET: 'jwt',
@@ -45,4 +45,25 @@ test('defaults NODE_ENV and PORT when not provided', () => {
   const config = loadConfig(FULL_ENV);
   assert.equal(config.NODE_ENV, 'development');
   assert.equal(config.PORT, 5000);
+});
+
+// The shared store is the point of the fix, so an operator who says nothing must
+// get it — an unset variable falling back to the per-instance store would quietly
+// undo the limiting on every deploy.
+test('defaults RATE_LIMIT_STORE to postgres, the shared store', () => {
+  assert.equal(loadConfig(FULL_ENV).RATE_LIMIT_STORE, 'postgres');
+});
+
+test('accepts every documented RATE_LIMIT_STORE value', () => {
+  for (const value of RATE_LIMIT_STORES) {
+    assert.equal(loadConfig({ ...FULL_ENV, RATE_LIMIT_STORE: value }).RATE_LIMIT_STORE, value);
+  }
+});
+
+test('rejects an unrecognised RATE_LIMIT_STORE rather than guessing', () => {
+  assert.throws(() => loadConfig({ ...FULL_ENV, RATE_LIMIT_STORE: 'redis' }), /RATE_LIMIT_STORE/);
+});
+
+test('RATE_LIMIT_STORE is optional, not a required var', () => {
+  assert.ok(!REQUIRED_VARS.includes('RATE_LIMIT_STORE'));
 });

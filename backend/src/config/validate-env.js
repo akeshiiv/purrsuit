@@ -15,6 +15,13 @@ export const REQUIRED_VARS = [
   'FRONTEND_URL',
 ];
 
+// Where rate-limit counters are kept. `postgres` is the default because the
+// in-process store is per-instance on serverless and therefore enforces nothing;
+// `memory` is the documented escape hatch. Optional, so it stays out of
+// REQUIRED_VARS — but a typo is caught here at startup rather than silently
+// falling back to a setting the operator did not ask for.
+export const RATE_LIMIT_STORES = ['postgres', 'memory'];
+
 // Validate `env` and return a frozen config object. Throws a single error listing
 // ALL missing variables (not just the first) so a misconfiguration can be fixed in
 // one pass.
@@ -31,10 +38,18 @@ export function loadConfig(env = process.env) {
     );
   }
 
+  const rateLimitStore = env.RATE_LIMIT_STORE ?? 'postgres';
+  if (!RATE_LIMIT_STORES.includes(rateLimitStore)) {
+    throw new Error(
+      `Invalid RATE_LIMIT_STORE: "${rateLimitStore}". Expected one of: ${RATE_LIMIT_STORES.join(', ')}.`
+    );
+  }
+
   const config = {};
   for (const name of REQUIRED_VARS) config[name] = env[name];
   config.NODE_ENV = env.NODE_ENV ?? 'development';
   config.PORT = env.PORT ?? 5000;
+  config.RATE_LIMIT_STORE = rateLimitStore;
 
   return Object.freeze(config);
 }
