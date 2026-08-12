@@ -4,7 +4,7 @@ import { computeActions } from '../realms/rules.js';
 import { RealmError, ensureSeasonFresh } from '../realms/service.js';
 import { validateAndComputeAward } from '../coins.js';
 import { evaluateQuest } from '../quests/service.js';
-import { normalizeTz, buildStatBlock, computeStreak } from './stats.js';
+import { normalizeTz, buildStatBlock, computeStreak, buildLast7Days } from './stats.js';
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -368,8 +368,14 @@ export async function getStudyStats(userId, tzInput) {
       FROM sessions
       WHERE user_id = ${userId}
     `,
+    // Local study days, and what was studied on each. The streak reads only the
+    // days and the chart reads only the last seven, but they share one query on
+    // purpose: it is the same GROUP BY over the same rows, so the extra column
+    // costs no scan and no round trip, and the two cannot disagree about a
+    // session that lands mid-request the way two separate reads could.
     sql`
-      SELECT to_char((created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS day
+      SELECT to_char((created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS day,
+             COALESCE(SUM(duration), 0)::int AS seconds
       FROM sessions
       WHERE user_id = ${userId}
       GROUP BY day
@@ -407,5 +413,8 @@ export async function getStudyStats(userId, tzInput) {
       totalCoins: seasonRows2[0].total_coins,
       activeDays: seasonRows2[0].active_days,
     }),
+    // All-time, not season-scoped: the card reads "Last 7 days" on both toggle
+    // positions, and a week that straddles a rollover is still the user's week.
+    last7Days: buildLast7Days(dayRows, today),
   };
 }
