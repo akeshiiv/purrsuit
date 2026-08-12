@@ -1,0 +1,14 @@
+-- backend/migrations/010_user_time_zone.sql
+-- The player's own IANA time zone, so a streak can be counted in that player's
+-- local days rather than the viewer's. Without it a leaderboard row would mean
+-- something different to everyone reading it, and would disagree with what the
+-- player sees on their own Stats page — only the browser knows the zone, and
+-- until now nothing stored what it said.
+--
+-- Deliberately NULL-able with NO default: NULL means "the client has not told us
+-- yet", and every read site coalesces it to 'UTC'. A DEFAULT 'UTC' would make
+-- "never told us" indistinguishable from "genuinely in UTC", and we want to be
+-- able to tell the two apart. Existing rows are not backfilled; they read as UTC
+-- until the client syncs after the next login. IF NOT EXISTS so re-running
+-- against a database that already has the column is a no-op rather than an error.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS time_zone TEXT;

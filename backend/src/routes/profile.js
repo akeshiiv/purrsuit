@@ -18,7 +18,7 @@ router.use(authenticate);
 // null when they are in no realm).
 router.get('/profile', asyncHandler(async (req, res) => {
   const rows = await sql`
-    SELECT id, name, email, avatar_url, colour FROM users WHERE id = ${req.user.id}
+    SELECT id, name, email, avatar_url, colour, time_zone FROM users WHERE id = ${req.user.id}
   `;
   if (!rows[0]) {
     return res.status(404).json({ error: 'USER_NOT_FOUND', message: 'No such user' });
@@ -26,21 +26,25 @@ router.get('/profile', asyncHandler(async (req, res) => {
   res.json(toProfile(rows[0], await memberRealmSummary(req.user.id)));
 }));
 
-// PATCH /api/profile — edit name, avatar, and/or colour. All fields optional;
-// only provided fields change. COALESCE keeps each unspecified column as-is.
+// PATCH /api/profile — edit name, avatar, colour and/or timeZone. All fields
+// optional; only provided fields change. COALESCE keeps each unspecified column
+// as-is. This is also how the client keeps time_zone current as a player travels;
+// validateProfilePatch never yields null for a present field, so an omitted one
+// is the only thing COALESCE can see as null.
 router.patch('/profile', asyncHandler(async (req, res) => {
   const result = validateProfilePatch(req.body ?? {});
   if (!result.ok) {
     return res.status(400).json({ error: result.error, message: result.message });
   }
-  const { name = null, avatarUrl = null, colour = null } = result.updates;
+  const { name = null, avatarUrl = null, colour = null, timeZone = null } = result.updates;
   const rows = await sql`
     UPDATE users
     SET name = COALESCE(${name}, name),
         avatar_url = COALESCE(${avatarUrl}, avatar_url),
-        colour = COALESCE(${colour}, colour)
+        colour = COALESCE(${colour}, colour),
+        time_zone = COALESCE(${timeZone}, time_zone)
     WHERE id = ${req.user.id}
-    RETURNING id, name, email, avatar_url, colour
+    RETURNING id, name, email, avatar_url, colour, time_zone
   `;
   if (!rows[0]) {
     return res.status(404).json({ error: 'USER_NOT_FOUND', message: 'No such user' });
