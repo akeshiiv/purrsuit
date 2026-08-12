@@ -35,6 +35,53 @@ test('mock getStats returns a StudyStats-shaped payload', async () => {
   if (stats.season) assertBlock(stats.season);
 });
 
+// The chart labels its bars from these dates, so the series has to be a full,
+// dense week in order — never sparse, never short, never newest-first.
+test('mock getStats returns seven dated days, oldest first, ending today', async () => {
+  const { last7Days } = await mockStudy.getStats('UTC');
+  assert.equal(last7Days.length, 7);
+
+  const pad = value => String(value).padStart(2, '0');
+  const localDay = date => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const today = new Date();
+
+  last7Days.forEach((entry, index) => {
+    const expected = new Date(today);
+    expected.setDate(expected.getDate() - (6 - index));
+    assert.equal(entry.date, localDay(expected), `entry ${index} is the right calendar day`);
+    assert.equal(typeof entry.minutes, 'number');
+    assert.ok(entry.minutes >= 0);
+  });
+});
+
+// The design's zero day is a flat stub rather than a missing bar, so the mock
+// has to contain one for that treatment to ever be seen.
+test('the mock week contains a zero day and a day past the chart reference', async () => {
+  const { last7Days } = await mockStudy.getStats('UTC');
+  assert.ok(last7Days.some(entry => entry.minutes === 0), 'a zero day keeps the gap visible');
+  assert.ok(last7Days.some(entry => entry.minutes > 60), 'a tall day exercises the rescaling');
+});
+
+// Two screens read the streak — the Stats card from here, the Ranks award from
+// the leaderboard row — so the mock must not hand them different numbers.
+test('the reported streak is the one on the member row', async () => {
+  const stats = await mockStudy.getStats('UTC');
+  assert.equal(stats.streak.current, state.me.streakCurrent);
+  assert.equal(stats.streak.longest, state.me.streakLongest);
+});
+
+// `streak.current` counts back from today, so the sample week has to agree with
+// it or the Stats screen contradicts itself in one glance.
+test('the mock week agrees with the reported current streak', async () => {
+  const { last7Days, streak } = await mockStudy.getStats('UTC');
+  let run = 0;
+  for (let index = last7Days.length - 1; index >= 0; index -= 1) {
+    if (last7Days[index].minutes === 0) break;
+    run += 1;
+  }
+  assert.equal(run, streak.current);
+});
+
 test('mock terminate returns { logged: true } for a valid distraction', async () => {
   const r = await mockStudy.terminate({
     durationMinutes: 25, reason: 'social-media', summary: 'IG', justification: 'reels',

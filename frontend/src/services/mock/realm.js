@@ -81,7 +81,9 @@ export async function endSeason() {
   return clone({
     season: {
       id: ended.id,
+      seasonNumber: ended.seasonNumber,
       status: 'ended',
+      startedAt: ended.startedAt,
       endsAt: ended.endsAt,
       stateVersion: state.season.stateVersion,
       winnerName: ended.winnerName,

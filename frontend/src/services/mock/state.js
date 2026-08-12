@@ -12,6 +12,13 @@ function makeQuest(key = DEFAULT_MOCK_QUEST) {
   return { key, current: 0, completed: false };
 }
 
+const SEASON_LENGTH_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// The seeded season is deliberately mid-flight, so the realm list has something
+// to render "day 4 of 7" from instead of a season that always began this second.
+const SEED_DAYS_ELAPSED = 3;
+
 function makeRealm(overrides = {}) {
   return {
     id: 7,
@@ -22,23 +29,34 @@ function makeRealm(overrides = {}) {
     maxPlayers: overrides.maxPlayers ?? 4,
     mapSize: 8,
     antiCheatEnabled: overrides.antiCheatEnabled ?? Boolean(overrides.antiCheat),
+    seasonLengthDays: SEASON_LENGTH_DAYS,
     ...overrides,
   };
 }
 
-const SEASON_LENGTH_DAYS = 7;
-
-function makeSeason(overrides = {}) {
+// `id` is the global row id and `seasonNumber` the per-realm 1-based counter —
+// the seed keeps them apart on purpose, because a UI that prints the id passes
+// only while a single realm exists. `elapsedDays` backdates `startedAt` for a
+// season already under way, and `lengthDays` is the realm's own season length,
+// so `endsAt` and the realm list's "day N of M" always describe the same season.
+function makeSeason({ elapsedDays = 0, lengthDays = SEASON_LENGTH_DAYS, ...overrides } = {}) {
+  const startedAt = Date.now() - elapsedDays * DAY_MS;
   return {
-    id: overrides.id ?? 12,
+    id: 42,
+    seasonNumber: 12,
     status: 'active',
-    endsAt: new Date(Date.now() + SEASON_LENGTH_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+    startedAt: new Date(startedAt).toISOString(),
+    endsAt: new Date(startedAt + lengthDays * DAY_MS).toISOString(),
     stateVersion: 1,
     winnerName: null,
     ...overrides,
   };
 }
 
+// Streaks are lifetime, not per-season, so they are seeded once and survive
+// every rollover — the same reason the real streak outlives a season reset.
+// Jun holds the longest one while leading on nothing else, so the Ranks award
+// card has to read the streak column rather than fall out of the ordering.
 function makeMe(overrides = {}) {
   return {
     id: 3,
@@ -50,6 +68,8 @@ function makeMe(overrides = {}) {
     units: { a: 1, b: 0, c: 0 },
     secondsStudied: 2100,
     battlesWon: 2,
+    streakCurrent: 4,
+    streakLongest: 9,
     ...overrides,
   };
 }
@@ -64,6 +84,8 @@ function makeOtherMembers() {
       role: 'member',
       secondsStudied: 3600,
       battlesWon: 1,
+      streakCurrent: 2,
+      streakLongest: 6,
     },
     {
       id: 5,
@@ -73,6 +95,8 @@ function makeOtherMembers() {
       role: 'member',
       secondsStudied: 1800,
       battlesWon: 0,
+      streakCurrent: 5,
+      streakLongest: 11,
     },
   ];
 }
@@ -144,9 +168,13 @@ export const state = {
     email: 'triplet@gmail.com',
     avatarUrl: 'https://example.com/photo.jpg',
     colour: '#3b82f6',
+    // Seeded to a zone that is neither UTC nor any plausible dev machine, so the
+    // client's start-up time-zone sync actually has a difference to find and
+    // PATCH in mock mode. A real profile is null here until that first sync.
+    timeZone: 'America/Los_Angeles',
   },
   realm: makeRealm(),
-  season: makeSeason(),
+  season: makeSeason({ elapsedDays: SEED_DAYS_ELAPSED }),
   me: makeMe(),
   members: makeOtherMembers(),
   // The most recently ended season, with the standings snapshotted at rollover.
@@ -247,10 +275,33 @@ export function leaderboardRows() {
       cellsA: owned.filter(cell => cell.unitType === 'A').length,
       cellsB: owned.filter(cell => cell.unitType === 'B').length,
       cellsC: owned.filter(cell => cell.unitType === 'C').length,
+      // Per-row streaks, so an award can be reduced out of the standings
+      // without a second request. The real endpoint counts each row in that
+      // member's own stored zone, not the viewer's — a row means the same
+      // thing to everyone reading it, and agrees with what that member sees
+      // on their own Stats page.
+      streakCurrent: member.streakCurrent,
+      streakLongest: member.streakLongest,
     };
   });
 
   return clone(rows.sort((a, b) => b.territories - a.territories));
+}
+
+// The dashboard's mini-leaderboard is a narrower projection than the standings
+// endpoint: the real `miniLeaderboardRows` query skips the per-member streak
+// aggregation, because Home polls this payload every 4s. Mirror the omission
+// here — mock and real returning the same shape is what the service layer rests
+// on, and only /api/season/leaderboard carries streaks.
+const MINI_LEADERBOARD_FIELDS = [
+  'userId', 'name', 'colour', 'territories', 'battlesWon', 'secondsStudied',
+  'cellsA', 'cellsB', 'cellsC',
+];
+
+function miniLeaderboardRows() {
+  return leaderboardRows()
+    .slice(0, 3)
+    .map(row => Object.fromEntries(MINI_LEADERBOARD_FIELDS.map(field => [field, row[field]])));
 }
 
 export function currentRealmPayload() {
@@ -261,7 +312,7 @@ export function currentRealmPayload() {
     season: state.season,
     me: { ...state.me, actions: actionsFor() },
     members: [state.me, ...state.members].map(publicMember),
-    miniLeaderboard: leaderboardRows().slice(0, 3),
+    miniLeaderboard: miniLeaderboardRows(),
     dailyQuest: dailyQuestPayload(),
   });
 }
@@ -290,6 +341,9 @@ export function resetForRealm(realm, role = 'admin') {
   state.realm = realm;
   state.season = makeSeason({
     id: state.season.id + 1,
+    // A realm's own counter starts at 1 however high the global id has climbed.
+    seasonNumber: 1,
+    lengthDays: realm.seasonLengthDays,
     stateVersion: state.season.stateVersion + 1,
   });
   state.me = makeMe({
@@ -321,6 +375,8 @@ export function rolloverSeason({ winnerName: declaredName } = {}) {
 
   state.endedSeason = {
     id: state.season.id,
+    seasonNumber: state.season.seasonNumber,
+    startedAt: state.season.startedAt,
     endsAt: state.season.endsAt,
     winnerName: winner?.name ?? declaredName ?? null,
     rows: standings,
@@ -328,6 +384,8 @@ export function rolloverSeason({ winnerName: declaredName } = {}) {
 
   state.season = makeSeason({
     id: state.season.id + 1,
+    seasonNumber: state.season.seasonNumber + 1,
+    lengthDays: state.realm.seasonLengthDays,
     // Keep the poll counter climbing across the boundary. Clients cache the last
     // version they saw and the poll endpoints short-circuit on an exact match, so
     // a counter that restarts can hand a stale client its own number back and
@@ -360,6 +418,10 @@ export function createRealm(settings) {
     name: settings.name,
     mapPreset: settings.mapPreset,
     maxPlayers: settings.maxPlayers,
+    // The create form already asks for a season length (7–366); honouring it
+    // here is what lets the realm list say "day 1 of 30" for a realm that
+    // really is running a 30-day season.
+    seasonLengthDays: Number(settings.seasonLengthDays) || SEASON_LENGTH_DAYS,
     antiCheatEnabled: Boolean(settings.antiCheat),
   }));
 }

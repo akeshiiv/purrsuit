@@ -50,14 +50,17 @@ Referenced by the endpoints below.
 // Profile
 { "id": 1, "name": "Tung Tung", "email": "triplet@gmail.com",
   "avatarUrl": "https://…/photo.jpg", "colour": "#3b82f6",
+  "timeZone": "Asia/Singapore" | null,   // IANA zone; null = never told us
   "realm": RealmSummary | null }
 
 // RealmSummary
 { "id": 7, "name": "Study Squad", "joinCode": "W7F6G7", "role": "admin",
-  "mapPreset": "open_plains", "maxPlayers": 4, "mapSize": 8, "antiCheatEnabled": false }
+  "mapPreset": "open_plains", "maxPlayers": 4, "mapSize": 8, "antiCheatEnabled": false,
+  "seasonLengthDays": 7 }
 
 // Season
-{ "id": 12, "status": "active", "endsAt": "2026-07-05T00:00:00Z",
+{ "id": 42, "seasonNumber": 12, "status": "active",
+  "startedAt": "2026-06-28T00:00:00Z", "endsAt": "2026-07-05T00:00:00Z",
   "stateVersion": 134, "winnerName": null }
 
 // Member  (coins/units present ONLY for the requesting user; others' inventories are private)
@@ -71,7 +74,8 @@ Referenced by the endpoints below.
 
 // LeaderboardRow
 { "userId": 1, "name": "player1", "colour": "#3b82f6", "territories": 67,
-  "battlesWon": 12, "secondsStudied": 126000, "cellsA": 30, "cellsB": 20, "cellsC": 17 }
+  "battlesWon": 12, "secondsStudied": 126000, "cellsA": 30, "cellsB": 20, "cellsC": 17,
+  "streakCurrent": 4, "streakLongest": 11 }
 
 // DailyQuest  (embedded in GET /api/realms/current; null when today's quest is done)
 { "key": "buy_all_three", "title": "Cat Collector",
@@ -85,12 +89,21 @@ Referenced by the endpoints below.
 // StudyStats  (GET /api/study/stats)
 { "streak": { "current": 5, "longest": 12 },
   "allTime": StatBlock,
-  "season": StatBlock | null }
+  "season": StatBlock | null,
+  "last7Days": [ { "date": "2026-07-08", "minutes": 45 }, "…7 entries, oldest → newest" ] }
 
 // StatBlock
 { "totalSeconds": 126000, "sessionCount": 42, "totalCoins": 8400,
   "avgSessionSeconds": 3000, "activeDays": 18, "avgSecondsPerActiveDay": 7000 }
 ```
+
+**`Season.id` vs `Season.seasonNumber`.** `id` is the global `seasons` row id; `seasonNumber` is the realm's own 1-based counter and is what the UI means by "season 12". They coincide only while a single realm exists, so anything user-facing reads `seasonNumber`.
+
+**`Season.startedAt`** (`seasons.started_at`) with **`RealmSummary.seasonLengthDays`** (`realms.season_length_days`, the 7–366 chosen at creation) is what lets a client render "day 4 of 7". The convention is that the first day of a season is **day 1**, i.e. `floor((now − startedAt) / 24h) + 1`, clamped into `1…seasonLengthDays`.
+
+**`Profile.timeZone`** is the player's IANA time zone as last reported by their browser, and it is what every *server-side* per-player day boundary is resolved in. `null` means the player has never synced one — nothing backfills it — and every read site coalesces `null` to `UTC`. It is deliberately nullable rather than defaulting to `"UTC"`, so "we were never told" stays distinguishable from "genuinely in UTC". The client keeps it current: after login it compares `Intl.DateTimeFormat().resolvedOptions().timeZone` against the stored value and `PATCH`es only on a difference, at most once per session, silently.
+
+**`LeaderboardRow.streakCurrent` / `streakLongest`** are the member's study streak in days, counted in **that member's own local days** — their stored `timeZone`, not the viewer's and not UTC. Each row therefore means the same thing to everyone looking at the board (it does not change value depending on who is reading it) *and* it agrees with what that player sees on their own Stats page. "Today" is per member too: a run that ended yesterday-in-Tokyo is not the same run as yesterday-in-Chicago. A member whose `timeZone` is still `null` is counted in `UTC`; a member with no sessions is `0` / `0`. Both fields appear on every row, including the snapshot rows returned by `GET /api/realm/season-status`.
 
 ---
 
@@ -102,17 +115,23 @@ The current user's profile and their realm summary (or `null`).
 **Response 200**
 ```json
 { "id": 1, "name": "Tung Tung", "email": "triplet@gmail.com",
-  "avatarUrl": "https://…/photo.jpg", "colour": "#3b82f6", "realm": null }
+  "avatarUrl": "https://…/photo.jpg", "colour": "#3b82f6",
+  "timeZone": "Asia/Singapore", "realm": null }
 ```
 
 ### `PATCH /api/profile`
-Edit display name, avatar, and personal colour (used to colour owned cells).
+Edit display name, avatar, personal colour (used to colour owned cells), and stored time zone.
 
 **Request**
 ```json
-{ "name": "Tung Tung Sahur", "avatarUrl": "https://…/new.jpg", "colour": "#a855f7" }
+{ "name": "Tung Tung Sahur", "avatarUrl": "https://…/new.jpg", "colour": "#a855f7",
+  "timeZone": "Asia/Singapore" }
 ```
-All fields optional; send only what changes.
+All fields optional and independent; send only what changes. Omitting `timeZone` leaves the stored zone untouched.
+
+`timeZone` must be a real IANA zone name — one `Intl.DateTimeFormat` accepts. Unlike the tolerant read path (an unknown *stored* zone reads as `UTC`), an explicit write is **rejected** rather than quietly falling back: a typo'd zone would otherwise be accepted and silently re-count the player's streak in the wrong calendar. `null` is not a valid write, so a synced zone cannot be cleared back to "never told us".
+
+The client sends this on its own, once per session after login, whenever the browser's zone differs from the stored one — see `Profile.timeZone` above. A user editing their profile never has to think about it.
 
 **Response 200** — the updated `Profile`.
 
@@ -121,6 +140,7 @@ All fields optional; send only what changes.
 | 400 | `INVALID_NAME` | name not 1–32 characters |
 | 400 | `INVALID_COLOUR` | colour not `#rrggbb` |
 | 400 | `INVALID_AVATAR` | avatarUrl not an http(s) URL |
+| 400 | `INVALID_TIMEZONE` | timeZone not a valid IANA zone |
 
 ---
 
@@ -333,6 +353,8 @@ Aggregated study statistics for the current user, over two fixed scopes.
   sessions into local calendar days for the streak and per-day metrics. Missing
   or invalid → `UTC`. The frontend sends `Intl.DateTimeFormat().resolvedOptions().timeZone`.
 
+This endpoint takes the zone from the request rather than reading the caller's stored `Profile.timeZone`, and the two can legitimately disagree for a moment: the live browser value is the more current one for the player's *own* page, while the stored copy exists so that *other* people's leaderboard rows can be counted in that player's calendar. The stored copy catches up on the next login sync.
+
 Read-only: no side effects (does not roll seasons over).
 
 **Response 200** — `StudyStats`
@@ -341,7 +363,14 @@ Read-only: no side effects (does not roll seasons over).
   "allTime": { "totalSeconds": 126000, "sessionCount": 42, "totalCoins": 8400,
                "avgSessionSeconds": 3000, "activeDays": 18, "avgSecondsPerActiveDay": 7000 },
   "season":  { "totalSeconds": 9000, "sessionCount": 3, "totalCoins": 600,
-               "avgSessionSeconds": 3000, "activeDays": 2, "avgSecondsPerActiveDay": 4500 } }
+               "avgSessionSeconds": 3000, "activeDays": 2, "avgSecondsPerActiveDay": 4500 },
+  "last7Days": [ { "date": "2026-07-08", "minutes": 45 },
+                 { "date": "2026-07-09", "minutes": 30 },
+                 { "date": "2026-07-10", "minutes": 0 },
+                 { "date": "2026-07-11", "minutes": 90 },
+                 { "date": "2026-07-12", "minutes": 25 },
+                 { "date": "2026-07-13", "minutes": 50 },
+                 { "date": "2026-07-14", "minutes": 65 } ] }
 ```
 
 - `allTime` covers every session the user ever logged (all realms/seasons).
@@ -349,6 +378,14 @@ Read-only: no side effects (does not roll seasons over).
   not in a realm with an active season.
 - `streak` is global/lifetime (survives season resets); `current` stays alive
   while the last study day is today or yesterday.
+- `last7Days` is **exactly 7 entries, oldest first**, index 6 being today in
+  `tz` — never sparse and never short. A day with no sessions is present with
+  `minutes: 0`, so the chart can draw the gap instead of shifting the bars.
+  `minutes` is whole minutes, `Math.round`ed from the summed session seconds,
+  and `date` is the local calendar date in the same `tz` used for `streak` and
+  `activeDays`, so the client labels bars from the dates rather than counting
+  offsets off its own clock. Scope is all-time sessions (the last 7 calendar
+  days regardless of season), on both positions of the screen's scope toggle.
 
 ---
 
@@ -461,6 +498,8 @@ Full standings for the current season, sorted by territories held (descending).
 ```json
 { "version": 135, "rows": [ { "...": "LeaderboardRow" } ], "season": { "...": "Season" } }
 ```
+
+Each row carries that player's `streakCurrent` / `streakLongest` (see LeaderboardRow above), so the standings screen can reduce its "Longest streak" award straight out of the rows it already polls. Each row's streak is counted in **that player's own local days** (their stored `timeZone`), never the viewer's — so the board reads identically to everyone and matches each player's own Stats page. Territory, battles and study time stay the ordering and the table's columns.
 
 ### `GET /api/realm/season-status`
 Whether the season has ended and whether this player still needs to see the end screen.
