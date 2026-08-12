@@ -53,9 +53,14 @@ function realmSummary(row, role) {
     maxPlayers: toInt(row.max_players ?? row.maxPlayers),
     mapSize: toInt(row.map_size ?? row.mapSize),
     antiCheatEnabled: Boolean(row.anticheat_enabled ?? row.antiCheatEnabled),
+    // With Season.startedAt this is what lets a client say "day 4 of 7" rather
+    // than only counting down to ends_at.
+    seasonLengthDays: toInt(row.season_length_days ?? row.seasonLengthDays),
   };
 }
 
+// Kept in step with the copy in ../season/service.js — both project a season row
+// into the same contract Season shape.
 function seasonPayload(row) {
   return {
     id: toInt(row.season_id ?? row.id),
@@ -63,6 +68,10 @@ function seasonPayload(row) {
     endsAt: iso(row.ends_at ?? row.endsAt),
     stateVersion: toInt(row.state_version ?? row.stateVersion),
     winnerName: row.winner_name ?? row.winnerName ?? null,
+    // `season_number` is the per-realm counter the UI means by "season 12";
+    // `id` is a global row id and is not it once a second realm exists.
+    seasonNumber: toInt(row.season_number ?? row.seasonNumber),
+    startedAt: iso(row.started_at ?? row.startedAt),
   };
 }
 
@@ -167,7 +176,7 @@ async function bumpSeasonVersion(tx, seasonId) {
     UPDATE seasons
     SET state_version = state_version + 1
     WHERE id = ${seasonId}
-    RETURNING id, status, ends_at, state_version
+    RETURNING id, season_number, status, started_at, ends_at, state_version
   `;
   return rows[0];
 }
@@ -273,9 +282,12 @@ async function dashboardPayload(userId, realmId) {
            r.map_preset,
            r.max_players::int AS max_players,
            r.map_size::int AS map_size,
+           r.season_length_days::int AS season_length_days,
            r.anticheat_enabled,
            s.id AS season_id,
+           s.season_number,
            s.status AS season_status,
+           s.started_at,
            s.ends_at,
            s.state_version,
            winner_user.name AS winner_name,
@@ -332,7 +344,7 @@ async function rollCurrentSeason(tx, current, now) {
         winner_member_id = ${winnerMemberId},
         state_version = state_version + 1
     WHERE id = ${current.season_id} AND status = 'active'
-    RETURNING id, status, ends_at, state_version
+    RETURNING id, season_number, status, started_at, ends_at, state_version
   `;
 
   if (endedRows.length === 0) {
@@ -349,7 +361,7 @@ async function rollCurrentSeason(tx, current, now) {
   const newSeasonRows = await tx`
     INSERT INTO seasons (realm_id, season_number, started_at, ends_at, state_version)
     VALUES (${current.realm_id}, ${nextSeasonNumber}, ${now}, ${nextEndsAt}, ${nextStateVersion})
-    RETURNING id, status, ends_at, state_version
+    RETURNING id, season_number, status, started_at, ends_at, state_version
   `;
   const newSeason = newSeasonRows[0];
   const members = await memberRowsForRealm(tx, current.realm_id);
@@ -444,6 +456,7 @@ export async function memberRealmSummary(userId) {
            r.map_preset,
            r.max_players::int AS max_players,
            r.map_size::int AS map_size,
+           r.season_length_days::int AS season_length_days,
            r.anticheat_enabled,
            rm.role
     FROM realm_members rm
@@ -504,7 +517,7 @@ export async function createRealm(userId, input) {
         const seasonRows = await tx`
           INSERT INTO seasons (realm_id, season_number, started_at, ends_at, state_version)
           VALUES (${realm.id}, 1, ${now}, ${endsAt}, 1)
-          RETURNING id, status, ends_at, state_version
+          RETURNING id, season_number, status, started_at, ends_at, state_version
         `;
         const season = seasonRows[0];
         const cells = generateSeasonCells({
@@ -571,6 +584,7 @@ export async function joinRealm(userId, input = {}) {
              s.id AS season_id,
              s.season_number,
              s.status AS season_status,
+             s.started_at,
              s.ends_at,
              s.state_version
       FROM realms r
