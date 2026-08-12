@@ -51,6 +51,7 @@ Referenced by the endpoints below.
 { "id": 1, "name": "Tung Tung", "email": "triplet@gmail.com",
   "avatarUrl": "https://…/photo.jpg", "colour": "#3b82f6",
   "timeZone": "Asia/Singapore" | null,   // IANA zone; null = never told us
+  "hasOnboarded": true,                  // first-run tour done; never null
   "realm": RealmSummary | null }
 
 // RealmSummary
@@ -103,6 +104,10 @@ Referenced by the endpoints below.
 
 **`Profile.timeZone`** is the player's IANA time zone as last reported by their browser, and it is what every *server-side* per-player day boundary is resolved in. `null` means the player has never synced one — nothing backfills it — and every read site coalesces `null` to `UTC`. It is deliberately nullable rather than defaulting to `"UTC"`, so "we were never told" stays distinguishable from "genuinely in UTC". The client keeps it current: after login it compares `Intl.DateTimeFormat().resolvedOptions().timeZone` against the stored value and `PATCH`es only on a difference, at most once per session, silently.
 
+**`Profile.hasOnboarded`** is whether this account has already been through the first-run tour. It is **per-account, not per-realm**: leaving a realm and joining another does not replay the tour, and nothing in a season rollover resets it. The client is the only writer — it `PATCH`es `hasOnboarded: true` once, as the player leaves the tour through its single exit, the final **Start my first session**. Skipping does not bypass that write: the tour's *Skip tour* control jumps ahead to the colour step rather than out of the flow, because the colour is the one thing the tour collects rather than teaches. The server never sets it on the player's behalf beyond the column default.
+
+It is always a boolean and never `null`: unlike `timeZone` there is no third state worth telling apart, since "never asked" and "asked and abandoned" both mean *show the tour*. New sign-ups start `false`; every user who was already a member of a realm when the column was added was backfilled to `true`, so the tour does not ambush established players. The tour is meant to run after the first realm is created or joined rather than at sign-up — its steps describe a board, a colour and units that do not exist before then — so a brand-new account sitting on `false` with `realm: null` is the expected state, not a missed showing.
+
 **`LeaderboardRow.streakCurrent` / `streakLongest`** are the member's study streak in days, counted in **that member's own local days** — their stored `timeZone`, not the viewer's and not UTC. Each row therefore means the same thing to everyone looking at the board (it does not change value depending on who is reading it) *and* it agrees with what that player sees on their own Stats page. "Today" is per member too: a run that ended yesterday-in-Tokyo is not the same run as yesterday-in-Chicago. A member whose `timeZone` is still `null` is counted in `UTC`; a member with no sessions is `0` / `0`. Both fields appear on every row, including the snapshot rows returned by `GET /api/realm/season-status`.
 
 ---
@@ -116,22 +121,24 @@ The current user's profile and their realm summary (or `null`).
 ```json
 { "id": 1, "name": "Tung Tung", "email": "triplet@gmail.com",
   "avatarUrl": "https://…/photo.jpg", "colour": "#3b82f6",
-  "timeZone": "Asia/Singapore", "realm": null }
+  "timeZone": "Asia/Singapore", "hasOnboarded": true, "realm": null }
 ```
 
 ### `PATCH /api/profile`
-Edit display name, avatar, personal colour (used to colour owned cells), and stored time zone.
+Edit display name, avatar, personal colour (used to colour owned cells), stored time zone, and the first-run tour flag.
 
 **Request**
 ```json
 { "name": "Tung Tung Sahur", "avatarUrl": "https://…/new.jpg", "colour": "#a855f7",
-  "timeZone": "Asia/Singapore" }
+  "timeZone": "Asia/Singapore", "hasOnboarded": true }
 ```
-All fields optional and independent; send only what changes. Omitting `timeZone` leaves the stored zone untouched.
+All fields optional and independent; send only what changes. Omitting `timeZone` or `hasOnboarded` leaves the stored value untouched.
 
 `timeZone` must be a real IANA zone name — one `Intl.DateTimeFormat` accepts. Unlike the tolerant read path (an unknown *stored* zone reads as `UTC`), an explicit write is **rejected** rather than quietly falling back: a typo'd zone would otherwise be accepted and silently re-count the player's streak in the wrong calendar. `null` is not a valid write, so a synced zone cannot be cleared back to "never told us".
 
 The client sends this on its own, once per session after login, whenever the browser's zone differs from the stored one — see `Profile.timeZone` above. A user editing their profile never has to think about it.
+
+`hasOnboarded` must be a real boolean; `"true"`, `1` and `null` are all rejected rather than coerced, because reading a truthy string as `true` would spend the tour's single showing on a request that never meant to. The client sends `hasOnboarded: true` as the player leaves the first-run tour — see `Profile.hasOnboarded` above — paired with the `colour` that tour collected, in a single request. `false` is a valid write and does persist (it is the way to make the tour run again), so this is the one field where sending a falsy value is not the same as omitting it.
 
 **Response 200** — the updated `Profile`.
 
@@ -141,6 +148,7 @@ The client sends this on its own, once per session after login, whenever the bro
 | 400 | `INVALID_COLOUR` | colour not `#rrggbb` |
 | 400 | `INVALID_AVATAR` | avatarUrl not an http(s) URL |
 | 400 | `INVALID_TIMEZONE` | timeZone not a valid IANA zone |
+| 400 | `INVALID_ONBOARDED` | hasOnboarded not a boolean |
 
 ---
 

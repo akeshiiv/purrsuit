@@ -168,6 +168,16 @@ export const state = {
     email: 'triplet@gmail.com',
     avatarUrl: 'https://example.com/photo.jpg',
     colour: '#3b82f6',
+    // True because the seeded player is mid-season with coins, cats and a
+    // four-day streak — an established account that plainly met the tour long
+    // ago, and one that would otherwise be held at /onboarding before any
+    // mocked screen could be opened. Visit /onboarding directly to see the
+    // tour in mock mode; nothing redirects away from it.
+    //
+    // Account-level, so `resetForRealm` leaves it alone: creating or joining a
+    // second realm does not replay the tour in production, and a mock that
+    // replayed it would be teaching the wrong behaviour.
+    hasOnboarded: true,
     // Seeded to a zone that is neither UTC nor any plausible dev machine, so the
     // client's start-up time-zone sync actually has a difference to find and
     // PATCH in mock mode. A real profile is null here until that first sync.

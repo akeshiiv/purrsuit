@@ -32,6 +32,13 @@ export async function update(profile) {
     throw mockError('INVALID_TIMEZONE', 'timeZone must be a valid IANA time zone.');
   }
 
+  // Strict about the type for the same reason the real endpoint is: the tour
+  // gets one showing, and a truthy 'yes' or 1 slipping through here would let a
+  // client bug pass in mock and fail against the deployed API.
+  if (profile.hasOnboarded !== undefined && typeof profile.hasOnboarded !== 'boolean') {
+    throw mockError('INVALID_ONBOARDED', 'hasOnboarded must be a boolean.');
+  }
+
   state.profile = { ...state.profile, ...profile };
   state.me.name = state.profile.name;
   state.me.colour = state.profile.colour;

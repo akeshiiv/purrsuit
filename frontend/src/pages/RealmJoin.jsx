@@ -23,6 +23,10 @@ export default function RealmJoin() {
 
     try {
       await realmService.join({ joinCode });
+      // Into the app, not straight to /onboarding: RequireRealm diverts a player
+      // who has not seen the tour, so routing there from here as well would put
+      // the decision in two places. A player who onboarded in an earlier realm
+      // then correctly lands on Home rather than sitting through it again.
       navigate('/realm');
     } catch (caught) {
       setError(caught.message);

@@ -193,9 +193,75 @@ test('validateProfilePatch reports name before colour before avatar before timeZ
   );
 });
 
+// hasOnboarded was added last and is checked last, so the precedence the
+// contract publishes did not move when it arrived.
+test('validateProfilePatch reports every other field before hasOnboarded', () => {
+  const bad = { name: '', colour: 'blue', avatarUrl: 'nope', timeZone: 'nope', hasOnboarded: 'nope' };
+  assert.equal(validateProfilePatch(bad).error, 'INVALID_NAME');
+  assert.equal(validateProfilePatch({ colour: 'blue', avatarUrl: 'nope', timeZone: 'nope', hasOnboarded: 'nope' }).error, 'INVALID_COLOUR');
+  assert.equal(validateProfilePatch({ avatarUrl: 'nope', timeZone: 'nope', hasOnboarded: 'nope' }).error, 'INVALID_AVATAR');
+  assert.equal(validateProfilePatch({ timeZone: 'nope', hasOnboarded: 'nope' }).error, 'INVALID_TIMEZONE');
+  assert.equal(validateProfilePatch({ hasOnboarded: 'nope' }).error, 'INVALID_ONBOARDED');
+});
+
 test('validateProfilePatch treats an explicit null field as present and invalid', () => {
   assert.equal(validateProfilePatch({ name: null }).error, 'INVALID_NAME');
   assert.equal(validateProfilePatch({ timeZone: null }).error, 'INVALID_TIMEZONE');
+  assert.equal(validateProfilePatch({ hasOnboarded: null }).error, 'INVALID_ONBOARDED');
+});
+
+test('validateProfilePatch accepts hasOnboarded: true, the end-of-tour write', () => {
+  const result = validateProfilePatch({ hasOnboarded: true });
+  assert.deepEqual(result, { ok: true, updates: { hasOnboarded: true } });
+});
+
+// `false` is a value, not an absence: it has to survive validation as a real
+// update so a support reset (or a re-run of the tour) can actually be written.
+// If it were dropped here the route's COALESCE would silently keep the old TRUE.
+test('validateProfilePatch accepts hasOnboarded: false as a real update', () => {
+  const result = validateProfilePatch({ hasOnboarded: false });
+  assert.deepEqual(result, { ok: true, updates: { hasOnboarded: false } });
+  assert.equal('hasOnboarded' in result.updates, true);
+});
+
+// Truthiness is not consulted anywhere: 'yes' and 1 are how a client bug looks,
+// and coercing them would burn the tour's only showing on a request that never
+// said the player had seen it.
+test('validateProfilePatch rejects a non-boolean hasOnboarded with INVALID_ONBOARDED', () => {
+  for (const bad of ['yes', 'true', 'false', 1, 0, '', null, {}, []]) {
+    const result = validateProfilePatch({ hasOnboarded: bad });
+    assert.equal(result.ok, false, `expected ${JSON.stringify(bad)} to be rejected`);
+    assert.equal(result.error, 'INVALID_ONBOARDED', `expected ${JSON.stringify(bad)} to be rejected`);
+    assert.equal(result.updates, undefined);
+  }
+});
+
+// The client writes this by itself the moment the tour is finished or skipped,
+// with no user in the profile form — it must not carry away anything else.
+test('validateProfilePatch leaves other fields alone when only hasOnboarded is sent', () => {
+  const result = validateProfilePatch({ hasOnboarded: true });
+  assert.deepEqual(Object.keys(result.updates), ['hasOnboarded']);
+  assert.deepEqual(Object.keys(validateProfilePatch({ hasOnboarded: false }).updates), ['hasOnboarded']);
+});
+
+test('validateProfilePatch accepts hasOnboarded alongside the existing fields', () => {
+  const result = validateProfilePatch({
+    name: 'Tung Tung Sahur',
+    colour: '#A855F7',
+    avatarUrl: 'https://example.com/new.jpg',
+    timeZone: 'Europe/London',
+    hasOnboarded: true,
+  });
+  assert.deepEqual(result, {
+    ok: true,
+    updates: {
+      name: 'Tung Tung Sahur',
+      colour: '#a855f7',
+      avatarUrl: 'https://example.com/new.jpg',
+      timeZone: 'Europe/London',
+      hasOnboarded: true,
+    },
+  });
 });
 
 // --- toProfile -------------------------------------------------------------
@@ -208,6 +274,7 @@ test('toProfile maps a db row (snake_case) to the contract shape with realm null
     avatar_url: 'https://example.com/photo.jpg',
     colour: '#3b82f6',
     time_zone: 'Asia/Singapore',
+    has_onboarded: true,
   };
   assert.deepEqual(toProfile(row), {
     id: 1,
@@ -216,6 +283,7 @@ test('toProfile maps a db row (snake_case) to the contract shape with realm null
     avatarUrl: 'https://example.com/photo.jpg',
     colour: '#3b82f6',
     timeZone: 'Asia/Singapore',
+    hasOnboarded: true,
     realm: null,
   });
 });
@@ -231,8 +299,43 @@ test('toProfile reports timeZone as null when the column is unset', () => {
     avatar_url: 'https://example.com/shark.jpg',
     colour: '#a855f7',
     time_zone: null,
+    has_onboarded: false,
   };
   assert.equal(toProfile(row).timeZone, null);
   assert.equal('timeZone' in toProfile({ ...row, time_zone: undefined }), true);
   assert.equal(toProfile({ ...row, time_zone: undefined }).timeZone, null);
+});
+
+test('toProfile maps has_onboarded to hasOnboarded both ways round', () => {
+  const row = {
+    id: 3,
+    name: 'Bombardiro',
+    email: 'croc@gmail.com',
+    avatar_url: 'https://example.com/croc.jpg',
+    colour: '#22c55e',
+    time_zone: 'Europe/Rome',
+    has_onboarded: true,
+  };
+  assert.equal(toProfile(row).hasOnboarded, true);
+  assert.equal(toProfile({ ...row, has_onboarded: false }).hasOnboarded, false);
+});
+
+// A row read before the column existed, or by a query that forgot to select it,
+// must answer `false` and not `undefined` — the key vanishes from the JSON when
+// it is undefined, leaving the client with no flag to test and a tour that
+// restarts on every login. The literal `false` also matters: the client compares
+// rather than merely checking truthiness.
+test('toProfile coerces a missing has_onboarded column to false', () => {
+  const row = {
+    id: 4,
+    name: 'Tralalero',
+    email: 'shark@gmail.com',
+    avatar_url: 'https://example.com/shark.jpg',
+    colour: '#a855f7',
+    time_zone: null,
+  };
+  assert.equal('hasOnboarded' in toProfile(row), true);
+  assert.equal(toProfile(row).hasOnboarded, false);
+  assert.equal(toProfile({ ...row, has_onboarded: undefined }).hasOnboarded, false);
+  assert.equal(toProfile({ ...row, has_onboarded: null }).hasOnboarded, false);
 });
