@@ -57,6 +57,7 @@ export function AuthProvider({ children }) {
   // Fire-and-forget: no await, no state, nothing rendered from the result.
   useEffect(() => {
     if (loggedIn) syncStoredTimeZone();
+    else timeZoneSyncStarted = false;
   }, [loggedIn]);
 
   const handleLogout = async () => {
