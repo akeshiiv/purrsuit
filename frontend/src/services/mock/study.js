@@ -137,7 +137,8 @@ export async function terminate(input = {}) {
 
 // A plausible, deterministic StudyStats derived from mock state. The mock has
 // no real session log, so all-time is a fixed baseline plus the current
-// season's studied time; the streak is a fixed sample.
+// season's studied time, and the streak and the seven-day series are seeded
+// samples that agree with each other rather than aggregates of anything.
 function statBlock(totalSeconds, sessionCount, totalCoins, activeDays) {
   return {
     totalSeconds,
@@ -147,6 +148,29 @@ function statBlock(totalSeconds, sessionCount, totalCoins, activeDays) {
     activeDays,
     avgSecondsPerActiveDay: activeDays > 0 ? Math.round(totalSeconds / activeDays) : 0,
   };
+}
+
+// Minutes for the seven days the chart shows, oldest first — index 6 is today.
+// The zero day is there so the design's flat `#F0E4CC` stub is always on
+// screen, and the 90 outruns the chart's 1h reference bar so the rescaling is
+// exercised too. The four days ending today are what `streak.current` counts.
+const WEEK_MINUTES = [45, 30, 0, 90, 25, 50, 65];
+
+function localIsoDate(date) {
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// The real endpoint buckets these days in the `tz` it was handed; the mock has
+// no session log to bucket, so it labels the sample with the browser's own
+// local days — the same days the client would have asked for.
+function lastSevenDays() {
+  const today = new Date();
+  return WEEK_MINUTES.map((minutes, index) => {
+    const day = new Date(today);
+    day.setDate(day.getDate() - (6 - index));
+    return { date: localIsoDate(day), minutes };
+  });
 }
 
 export async function getStats() {
@@ -168,8 +192,12 @@ export async function getStats() {
   );
 
   return clone({
-    streak: { current: 4, longest: 9 },
+    // The streak lives on the member row, so the Stats card and the Ranks
+    // award card cannot drift apart in the mock the way they could if each
+    // screen invented its own number.
+    streak: { current: state.me?.streakCurrent ?? 0, longest: state.me?.streakLongest ?? 0 },
     allTime,
     season,
+    last7Days: lastSevenDays(),
   });
 }

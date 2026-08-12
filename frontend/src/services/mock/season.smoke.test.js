@@ -154,6 +154,84 @@ test('season-status reports NOT_IN_ACTIVE_SEASON when the player is in no realm'
   );
 });
 
+// Settings prints the realm's own season counter, and the realm list derives
+// "day N of M" from the start plus the length — so all three fields have to be
+// on the payloads the mock hands those screens.
+test('the current payload carries seasonNumber, startedAt and seasonLengthDays', async () => {
+  const current = await mockRealm.getCurrent();
+
+  assert.equal(typeof current.season.seasonNumber, 'number');
+  assert.ok(current.season.seasonNumber >= 1, 'the per-realm counter is 1-based');
+  assert.ok(!Number.isNaN(Date.parse(current.season.startedAt)), 'startedAt is an ISO timestamp');
+  assert.ok(new Date(current.season.startedAt) <= new Date(), 'the current season has begun');
+  assert.equal(typeof current.realm.seasonLengthDays, 'number');
+  assert.ok(current.realm.seasonLengthDays >= 1);
+});
+
+// The create form offers 7–366 season days. A mock that ignored the answer
+// would make "day N of M" a constant instead of the realm's own length.
+test('a created realm runs the season length it was created with', async () => {
+  await mockRealm.leave();
+  await mockRealm.create({
+    name: 'Night Owls', mapPreset: 'crossroads', maxPlayers: 3, seasonLengthDays: 30,
+  });
+
+  const current = await mockRealm.getCurrent();
+  assert.equal(current.realm.seasonLengthDays, 30);
+  assert.equal(current.season.seasonNumber, 1, "a new realm's first season is its season 1");
+  const span = Date.parse(current.season.endsAt) - Date.parse(current.season.startedAt);
+  assert.equal(Math.round(span / 86_400_000), 30, 'endsAt follows the same length');
+});
+
+// The id is a global row id and the number is per-realm: a UI that prints the
+// id is only right by accident, so the mock must not let them coincide.
+test('a rollover advances both the season id and the realm season number', async () => {
+  const before = await mockRealm.getCurrent();
+  await mockRealm.endSeason();
+  const after = await mockRealm.getCurrent();
+
+  assert.equal(after.season.id, before.season.id + 1);
+  assert.equal(after.season.seasonNumber, before.season.seasonNumber + 1);
+  // The fresh season starts now, so "day 1 of N" is what the realm list shows.
+  assert.ok(Date.now() - Date.parse(after.season.startedAt) < 60_000);
+});
+
+test('every leaderboard row carries both streaks, snapshots included', async () => {
+  const { rows } = await mockLeaderboard.get();
+  assert.ok(rows.length > 0);
+  for (const row of rows) {
+    assert.equal(typeof row.streakCurrent, 'number');
+    assert.equal(typeof row.streakLongest, 'number');
+    assert.ok(row.streakLongest >= row.streakCurrent, 'the longest streak cannot be the shorter one');
+  }
+
+  // The Ranks award is reduced out of these rows, so the leader on streaks must
+  // be able to differ from the leader on territory — otherwise the award card
+  // proves nothing about which column it read.
+  const topStreak = rows.reduce((best, row) => (row.streakLongest > best.streakLongest ? row : best));
+  assert.notEqual(topStreak.userId, rows[0].userId, 'the streak leader is not just the top of the table');
+
+  await mockRealm.endSeason();
+  const ended = await mockLeaderboard.seasonStatus();
+  for (const row of ended.rows) {
+    assert.equal(typeof row.streakLongest, 'number');
+  }
+});
+
+// Streaks are lifetime, so a season reset that wipes coins and territory must
+// leave them standing.
+test('streaks survive a season rollover', async () => {
+  const before = (await mockLeaderboard.get()).rows;
+  await mockRealm.endSeason();
+  const after = (await mockLeaderboard.get()).rows;
+
+  for (const row of before) {
+    const same = after.find(candidate => candidate.userId === row.userId);
+    assert.equal(same.streakLongest, row.streakLongest);
+    assert.equal(same.streakCurrent, row.streakCurrent);
+  }
+});
+
 test('only the admin can end the season', async () => {
   state.me.role = 'member';
   await assert.rejects(() => mockRealm.endSeason(), err => err.code === 'NOT_ADMIN');

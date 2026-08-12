@@ -1,21 +1,55 @@
 import { useEffect, useMemo, useState } from 'react';
+import Screen from '../components/layout/Screen.jsx';
 import Card from '../components/ui/Card.jsx';
+import WeekChart from '../components/stats/WeekChart.jsx';
 import { studyService } from '../services/index.js';
-import { formatStudy } from '../utils/time.js';
+import { browserTz, formatStudy } from '../utils/time.js';
 
-function browserTz() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  } catch {
-    return 'UTC';
-  }
+function StatTile({ label, value }) {
+  return (
+    <div className="rounded-card border-3 border-edge bg-surface px-[26px] pt-[26px] pb-[28px] shadow-[0_7px_0_var(--color-warm)]">
+      <p className="p-label">{label}</p>
+      <p className="mt-[8px] font-display text-[38px] leading-none font-extrabold text-ink">{value}</p>
+    </div>
+  );
 }
 
-function Stat({ label, value }) {
+function ScopeOption({ active, disabled = false, label, onSelect }) {
   return (
-    <div className="rounded border bg-white px-4 py-3">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold">{value}</p>
+    <button
+      aria-pressed={active}
+      className={[
+        'rounded-full border-2 px-[18px] py-[7px] font-display text-[14px] font-extrabold',
+        active ? 'border-gold-edge bg-gold text-ink-body' : 'border-transparent text-ink-muted',
+        disabled ? 'cursor-not-allowed opacity-45' : '',
+      ].join(' ')}
+      disabled={disabled}
+      onClick={onSelect}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
+// The header's context cluster on this screen: an All-time / Season segmented
+// control on the same `#F5E7CC` track as the tab bar. Season stays disabled
+// until there is a season to scope to, with the reason stated inline.
+function ScopeToggle({ scope, onScope, hasSeason }) {
+  return (
+    <div className="flex flex-col items-end gap-[4px]">
+      <div className="flex gap-[4px] rounded-full border-3 border-edge-soft bg-track p-[5px]">
+        <ScopeOption active={scope === 'allTime'} label="All-time" onSelect={() => onScope('allTime')} />
+        <ScopeOption
+          active={scope === 'season' && hasSeason}
+          disabled={!hasSeason}
+          label="Season"
+          onSelect={() => onScope('season')}
+        />
+      </div>
+      {!hasSeason && (
+        <span className="text-[10.5px] font-extrabold text-ink-muted">No active season to scope to</span>
+      )}
     </div>
   );
 }
@@ -41,70 +75,67 @@ export default function Stats() {
     return scope === 'season' && stats.season ? stats.season : stats.allTime;
   }, [stats, scope]);
 
-  if (loading) return <div className="p-6 text-sm text-slate-500">Loading stats...</div>;
-  if (error) {
+  const toggle = <ScopeToggle hasSeason={hasSeason} onScope={setScope} scope={scope} />;
+
+  if (loading) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold">Stats unavailable</h1>
-        <p className="mt-2 text-sm text-red-700">{error.message}</p>
-      </div>
+      <Screen bodyClassName="flex flex-col items-center justify-center" right={toggle}>
+        <Card className="px-6 py-5 text-[15px] text-ink-muted">Loading stats...</Card>
+      </Screen>
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Study Stats</h1>
-        <div className="ml-auto flex overflow-hidden rounded border text-sm">
-          <button
-            type="button"
-            onClick={() => setScope('allTime')}
-            className={scope === 'allTime' ? 'bg-slate-900 px-3 py-1 text-white' : 'px-3 py-1'}
-          >
-            All-time
-          </button>
-          <button
-            type="button"
-            onClick={() => setScope('season')}
-            disabled={!hasSeason}
-            className={
-              scope === 'season' && hasSeason
-                ? 'bg-slate-900 px-3 py-1 text-white'
-                : 'px-3 py-1 disabled:text-slate-300'
-            }
-          >
-            Season
-          </button>
-        </div>
-      </div>
+  if (error) {
+    return (
+      <Screen bodyClassName="flex flex-col items-center justify-center" right={toggle}>
+        <Card className="max-w-[520px] px-7 py-6">
+          <h1 className="font-display text-[26px] font-extrabold text-ink">Stats unavailable</h1>
+          <p className="mt-[8px] text-[14px] font-bold text-danger-ink" role="alert">{error.message}</p>
+        </Card>
+      </Screen>
+    );
+  }
 
-      <Card>
-        <div className="flex items-center gap-4">
-          <span className="text-3xl">🔥</span>
+  const streakDays = stats.streak.current;
+  const longestDays = stats.streak.longest;
+
+  return (
+    <Screen bodyClassName="flex flex-col items-center justify-center gap-[22px]" right={toggle}>
+      <div className="flex w-full max-w-[1180px] gap-[22px]">
+        <div className="flex flex-1 items-center gap-[28px] rounded-panel border-4 border-edge-strong bg-linear-to-b from-surface to-[#F5E3C4] px-[34px] py-[30px] shadow-[0_10px_0_var(--color-warm-deep)]">
+          <div className="flex size-[132px] flex-none items-center justify-center rounded-full border-4 border-[#C08D45] bg-gold">
+            <span className="p-nums text-[58px] text-ink-body">{streakDays}</span>
+          </div>
           <div>
-            <p className="text-sm text-slate-500">Study streak</p>
-            <p className="text-2xl font-semibold">
-              {stats.streak.current} {stats.streak.current === 1 ? 'day' : 'days'} in a row!
+            <p className="p-label">Study streak</p>
+            <p className="mt-[3px] font-display text-[32px] leading-[1.1] font-extrabold text-ink">
+              {streakDays} {streakDays === 1 ? 'day' : 'days'} in a row!
             </p>
-            <p className="text-xs text-slate-500">Longest: {stats.streak.longest} days</p>
+            <p className="mt-[5px] text-[13px] font-bold text-ink-muted">
+              Longest: {longestDays} {longestDays === 1 ? 'day' : 'days'} · miss a day and it resets
+            </p>
           </div>
         </div>
-      </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label="Total study time" value={formatStudy(block.totalSeconds)} />
-        <Stat label="Average per day" value={formatStudy(block.avgSecondsPerActiveDay)} />
-        <Stat label="Total sessions" value={block.sessionCount} />
-        <Stat label="Average session" value={formatStudy(block.avgSessionSeconds)} />
-        <Stat label="Coins earned" value={block.totalCoins} />
-        <Stat label="Days studied" value={block.activeDays} />
+        {/* All-time on both toggle positions: the card is "Last 7 days", not
+            "last 7 days of the season". */}
+        <WeekChart last7Days={stats.last7Days} />
+      </div>
+
+      <div className="grid w-full max-w-[1180px] grid-cols-3 gap-[22px]">
+        <StatTile label="Total study time" value={formatStudy(block.totalSeconds)} />
+        <StatTile label="Average per day" value={formatStudy(block.avgSecondsPerActiveDay)} />
+        <StatTile label="Total sessions" value={block.sessionCount} />
+        <StatTile label="Average session" value={formatStudy(block.avgSessionSeconds)} />
+        <StatTile label="Coins earned" value={(block.totalCoins ?? 0).toLocaleString()} />
+        <StatTile label="Days studied" value={block.activeDays} />
       </div>
 
       {block.sessionCount === 0 && (
-        <p className="text-sm text-slate-500">
+        <p className="w-full max-w-[1180px] text-[13px] font-bold text-ink-muted">
           Complete a study session to build your STREAK!
         </p>
       )}
-    </div>
+    </Screen>
   );
 }

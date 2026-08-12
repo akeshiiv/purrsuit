@@ -23,16 +23,18 @@ export default function ConfirmDialog({
   };
 
   return (
-    <Modal open={open} onClose={close} title={isSecondStep ? secondTitle : title}>
-      <div className="space-y-4">
+    <Modal className="max-w-[440px]" open={open} onClose={close} title={isSecondStep ? secondTitle : title}>
+      <div className="space-y-5">
         <div>
-          <h2 className="text-lg font-semibold">{isSecondStep ? secondTitle : title}</h2>
-          <p className="mt-2 text-sm text-slate-700">
+          <h2 className="font-display text-[24px] font-extrabold text-ink">
+            {isSecondStep ? secondTitle : title}
+          </h2>
+          <p className="mt-2 text-[13.5px] text-ink-muted">
             {isSecondStep ? secondMessage : message}
           </p>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={close}>Cancel</Button>
+        <div className="flex justify-end gap-3">
+          <Button variant="plain" onClick={close}>Cancel</Button>
           <Button
             variant="danger"
             onClick={() => {

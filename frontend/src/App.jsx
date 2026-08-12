@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   BrowserRouter,
-  Link,
   Navigate,
   Outlet,
   Route,
   Routes,
 } from 'react-router';
 
-import { GameProvider, useGame } from './components/GameContext.jsx';
+import { GameProvider } from './components/GameContext.jsx';
 import { useAuth } from './components/AuthContext.jsx';
 import SeasonEndGate from './components/SeasonEndGate.jsx';
 import { realmService } from './services/index.js';
@@ -25,6 +24,14 @@ import RealmSelect from './pages/RealmSelect.jsx';
 import Shop from './pages/Shop.jsx';
 import Stats from './pages/Stats.jsx';
 import StudySetup from './pages/StudySetup.jsx';
+
+function Loading({ label = 'Loading…' }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-page">
+      <p className="font-display text-[19px] font-extrabold text-ink-muted">{label}</p>
+    </div>
+  );
+}
 
 function RequireAuth({ children }) {
   const { loggedIn } = useAuth();
@@ -65,14 +72,16 @@ function RequireRealm({ children }) {
   }, []);
 
   if (loading) {
-    return <div className="p-6">Loading realm...</div>;
+    return <Loading label="Loading realm…" />;
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold">Realm unavailable</h1>
-        <p className="mt-2 text-sm text-red-700">{error.message}</p>
+      <div className="flex min-h-screen items-center justify-center bg-page p-6">
+        <div className="p-card-hero max-w-md p-8 text-center">
+          <h1 className="font-display text-[26px] font-extrabold text-ink">Realm unavailable</h1>
+          <p className="mt-2 text-[13.5px] text-ink-muted">{error.message}</p>
+        </div>
       </div>
     );
   }
@@ -122,52 +131,22 @@ function LoginGate() {
   }, [loggedIn]);
 
   if (!loggedIn) return <Login />;
-  if (!destination) return <div className="p-6">Loading...</div>;
+  if (!destination) return <Loading />;
   return <Navigate to={destination} replace />;
 }
 
+/**
+ * Every screen draws its own chrome (each is a full 1440x900 frame in the
+ * design), so this layout only carries what must live above all of them.
+ */
 function AuthLayout() {
-  const { logout } = useAuth();
-
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b bg-white">
-        <nav className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 p-3 text-sm">
-          <Link className="font-semibold" to="/realm">Purrsuit</Link>
-          <Link to="/realms">Realms</Link>
-          <Link to="/account">Account</Link>
-          <button className="ml-auto rounded border px-3 py-1" type="button" onClick={logout}>
-            Logout
-          </button>
-        </nav>
-      </header>
-      <main className="mx-auto max-w-5xl p-4">
-        <Outlet />
-      </main>
+    <div className="min-h-screen bg-page text-ink-body">
+      <Outlet />
       {/* App-wide so the season-end screen reaches the player wherever they are —
           notably /account, where the admin ends the season. The focus-session
           route sits outside this layout and stays uninterrupted. */}
       <SeasonEndGate />
-    </div>
-  );
-}
-
-function RealmLayout() {
-  const { realm, me } = useGame();
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-2 rounded border bg-white px-4 py-3 text-sm">
-        <span className="font-medium">{realm.name}</span>
-        <span className="text-slate-500">Coins: {me.coins}</span>
-        <nav className="ml-auto flex flex-wrap items-center gap-x-8 gap-y-2">
-          <Link to="/realm">Dashboard</Link>
-          <Link to="/realm/inventory">Inventory</Link>
-          <Link to="/realm/leaderboard">Leaderboard</Link>
-          <Link to="/realm/stats">Stats</Link>
-        </nav>
-      </div>
-      <Outlet />
     </div>
   );
 }
@@ -202,7 +181,7 @@ export default function App() {
           <Route
             element={(
               <RequireRealm>
-                <RealmLayout />
+                <Outlet />
               </RequireRealm>
             )}
           >

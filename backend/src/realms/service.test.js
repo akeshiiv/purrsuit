@@ -48,7 +48,9 @@ function runRollover({ endedStateVersion, seasonNumber = 4 }) {
         return Promise.resolve({
           rows: [{
             id: 12,
+            season_number: seasonNumber,
             status: 'ended',
+            started_at: new Date('2026-07-01T00:00:00Z'),
             ends_at: new Date('2026-07-08T00:00:00Z'),
             state_version: endedStateVersion + 1,
           }],
@@ -56,7 +58,14 @@ function runRollover({ endedStateVersion, seasonNumber = 4 }) {
       }
       if (/INSERT INTO seasons/i.test(sql)) {
         return Promise.resolve({
-          rows: [{ id: 13, status: 'active', ends_at: new Date('2026-07-15T00:00:00Z'), state_version: values[4] }],
+          rows: [{
+            id: 13,
+            season_number: seasonNumber + 1,
+            status: 'active',
+            started_at: new Date('2026-07-08T00:00:00Z'),
+            ends_at: new Date('2026-07-15T00:00:00Z'),
+            state_version: values[4],
+          }],
         });
       }
       if (/FROM realm_members rm JOIN users u/i.test(sql) && /rm\.coins::int/i.test(sql)) {
@@ -126,8 +135,36 @@ test('endSeasonNow reports the ended season and its winner', async () => {
   assert.equal(result.season.winnerName, 'player1');
 });
 
+// A Season payload has to carry the realm's own season counter and start time.
+// The counter is what "season 5" on screen means; the row id is global and turns
+// into a nonsense label the moment a second realm exists.
+test('endSeasonNow reports the per-realm season number and start time', async () => {
+  const { result } = await runRollover({ endedStateVersion: 10, seasonNumber: 4 });
+  assert.equal(result.season.seasonNumber, 4);
+  assert.equal(result.season.startedAt, '2026-07-01T00:00:00.000Z');
+});
+
+// The likely failure mode for those two fields is a statement that never asks
+// for them: seasonPayload then reads undefined and the season silently loses its
+// number. Every season row the rollover writes back feeds a payload, so every
+// RETURNING has to name both columns.
+test('every season row the rollover writes back returns season_number and started_at', async () => {
+  const { queries } = await runRollover({ endedStateVersion: 10 });
+
+  const seasonWrites = queries.filter(
+    (q) => /(UPDATE seasons|INSERT INTO seasons)/i.test(q.sql) && /RETURNING/i.test(q.sql),
+  );
+  assert.ok(seasonWrites.length >= 2, 'the rollover both ends a season and starts one');
+  for (const write of seasonWrites) {
+    const returning = write.sql.match(/RETURNING (.+)$/i)[1];
+    assert.match(returning, /\bseason_number\b/, write.sql);
+    assert.match(returning, /\bstarted_at\b/, write.sql);
+  }
+});
+
 const PAST = new Date('2026-07-08T00:00:00Z');
 const FUTURE = new Date('2099-01-01T00:00:00Z');
+const STARTED = new Date('2026-07-01T00:00:00Z');
 
 const REALM_COLUMNS = {
   join_code: 'W7F6G7',
@@ -214,12 +251,16 @@ function runJoin({ endsAt, seasonStatus = 'active', rollTakes = true }) {
       if (/UPDATE seasons SET status = 'ended'/i.test(sql)) {
         if (!rollTakes) return Promise.resolve({ rows: [] });
         return Promise.resolve({
-          rows: [{ id: 12, status: 'ended', ends_at: endsAt, state_version: 11 }],
+          rows: [{
+            id: 12, season_number: 4, status: 'ended', started_at: STARTED, ends_at: endsAt, state_version: 11,
+          }],
         });
       }
       if (/INSERT INTO seasons/i.test(sql)) {
         return Promise.resolve({
-          rows: [{ id: 13, status: 'active', ends_at: FUTURE, state_version: 12 }],
+          rows: [{
+            id: 13, season_number: 5, status: 'active', started_at: STARTED, ends_at: FUTURE, state_version: 12,
+          }],
         });
       }
       if (/FROM realm_members rm JOIN users u/i.test(sql) && /rm\.coins::int/i.test(sql)) {
@@ -241,7 +282,9 @@ function runJoin({ endsAt, seasonStatus = 'active', rollTakes = true }) {
       }
       if (/UPDATE seasons SET state_version = state_version \+ 1/i.test(sql)) {
         return Promise.resolve({
-          rows: [{ id: 13, status: 'active', ends_at: FUTURE, state_version: 13 }],
+          rows: [{
+            id: 13, season_number: 5, status: 'active', started_at: STARTED, ends_at: FUTURE, state_version: 13,
+          }],
         });
       }
       return Promise.resolve({ rows: [] });
@@ -312,6 +355,21 @@ test('a season still inside its window is joined without any rollover', async ()
     !queries.some((q) => /UPDATE seasons SET status = 'ended'/i.test(q.sql)),
     'a live season must not be disturbed by a join',
   );
+});
+
+test('joining reports the season number and start time, not just the row id', async () => {
+  const { result, error } = await runJoin({ endsAt: FUTURE });
+
+  assert.equal(error, null);
+  assert.equal(result.season.seasonNumber, 5);
+  assert.equal(result.season.startedAt, STARTED.toISOString());
+});
+
+// Season.startedAt alone cannot say "day 4 of 7" — the length of the season has
+// to come back with the realm.
+test('the realm summary carries the season length', async () => {
+  const { result } = await runJoin({ endsAt: FUTURE });
+  assert.equal(result.realm.seasonLengthDays, 7);
 });
 
 test('a realm parked between seasons is still refused', async () => {

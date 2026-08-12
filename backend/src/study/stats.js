@@ -37,6 +37,44 @@ function dayIndex(dateStr) {
   return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
 
+// Inverse of dayIndex. Walking the window by epoch-day index rather than by
+// Date arithmetic is what keeps month ends and DST out of it: these are
+// calendar labels the database already resolved in the user's zone, not
+// instants.
+function dayString(index) {
+  return new Date(index * 86400000).toISOString().slice(0, 10);
+}
+
+const SERIES_DAYS = 7;
+
+// The per-day study series behind the "Last 7 days" chart. `rows` are the
+// grouped local days from SQL ({ day, seconds }); `today` is that same local
+// calendar day. SQL only returns days the user actually studied, so the zero
+// fill has to happen here — the chart needs a bar for every day, including the
+// empty ones, or it silently redraws a week as five days.
+//
+// Always exactly SERIES_DAYS entries, oldest first, so the last element is
+// today and the client can index the window without recomputing dates.
+export function buildLast7Days(rows, today) {
+  const secondsByDay = new Map();
+  for (const row of rows ?? []) {
+    if (typeof row?.day !== 'string') continue;
+    // Added rather than assigned: the query groups by day, but summing means an
+    // ungrouped row-per-session input would still produce the right total.
+    secondsByDay.set(row.day, (secondsByDay.get(row.day) ?? 0) + (Number(row.seconds) || 0));
+  }
+
+  const todayIndex = dayIndex(today);
+  const series = [];
+  for (let offset = SERIES_DAYS - 1; offset >= 0; offset -= 1) {
+    const date = dayString(todayIndex - offset);
+    // Rounded after summing, so a day of short sessions is not rounded away one
+    // session at a time.
+    series.push({ date, minutes: Math.round((secondsByDay.get(date) ?? 0) / 60) });
+  }
+  return series;
+}
+
 // Study streak from a list of local study days. `current` is the run ending on
 // the most recent study day, counted only if that day is `today` or the day
 // before (grace through today); otherwise 0. `longest` is the longest run of
