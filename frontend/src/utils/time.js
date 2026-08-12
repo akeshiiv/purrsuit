@@ -1,3 +1,16 @@
+// The player's live IANA zone, e.g. "Asia/Singapore". Every study day — the
+// streak, the 7-day series — is a *local* calendar day, so this is what the
+// stats request buckets by and what the stored profile zone is synced from.
+// `resolvedOptions()` is available everywhere we run, but the fallback keeps a
+// locked-down or exotic runtime from taking the whole screen down with it.
+export function browserTz() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 export function formatStudy(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
   const hours = Math.floor(total / 3600);
