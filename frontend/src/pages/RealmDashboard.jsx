@@ -16,8 +16,8 @@ import { UNIT_META, UNIT_ORDER, beatsLabel } from '../components/units.js';
 import { attackTargets, cellKey, dominantUnit, standings } from '../components/map/mapModel.js';
 import { formatCountdown } from '../utils/time.js';
 
-const IN_RANGE_HINT = 'Glowing tiles are in range — tap one to attack.';
-const NO_RANGE_HINT = 'Nothing in range — cats only reach cells next to your own.';
+const IN_RANGE_HINT = 'Glowing tiles are in range. Tap one to attack.';
+const NO_RANGE_HINT = 'Nothing in range. Cats only reach cells next to your own.';
 
 function heldOf(units, type) {
   return units?.[UNIT_META[type].key] ?? 0;
@@ -164,7 +164,7 @@ export default function RealmDashboard() {
             )}
             {error && (
               <p className="mt-1 text-[12.5px] font-extrabold text-danger-ink" role="alert">
-                Couldn't refresh — retrying...
+                Couldn't refresh, retrying...
               </p>
             )}
           </div>
@@ -232,13 +232,13 @@ function describe(deploy, intent) {
   const sent = UNIT_META[intent.unitType]?.name ?? 'Your cat';
 
   if (intent.mode === 'defend') {
-    return `Reinforced ${at} — ${sent} ×${cell.troopCount} now.`;
+    return `Reinforced ${at}. ${sent} ×${cell.troopCount} now.`;
   }
-  if (deploy.result === 'claimed') return `Claimed ${at} — ${sent} holds it now.`;
-  if (deploy.result === 'captured') return `Captured ${at} — ${sent} holds it now.`;
+  if (deploy.result === 'claimed') return `Claimed ${at}. ${sent} holds it now.`;
+  if (deploy.result === 'captured') return `Captured ${at}. ${sent} holds it now.`;
 
   const defender = UNIT_META[intent.target?.unitType]?.name;
   return defender
-    ? `Repelled at ${at} — ${sent} doesn't beat ${defender}.`
-    : `Repelled at ${at} — ${sent} couldn't take it.`;
+    ? `Repelled at ${at}. ${sent} doesn't beat ${defender}.`
+    : `Repelled at ${at}. ${sent} couldn't take it.`;
 }

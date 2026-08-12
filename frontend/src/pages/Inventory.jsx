@@ -140,7 +140,7 @@ export default function Inventory() {
             </div>
             {noCats && (
               <p className="mt-[18px] text-center text-[13.5px] font-bold text-ink-muted text-pretty">
-                No cats yet — every slot is open. Study to earn coins, then adopt your first cat
+                No cats yet. Every slot is open. Study to earn coins, then adopt your first cat
                 from the shop for {UNIT_COST}.
               </p>
             )}
@@ -160,7 +160,7 @@ export default function Inventory() {
                     className="text-[12.5px] font-extrabold text-ink-muted"
                     role={mapError ? 'alert' : undefined}
                   >
-                    {mapError ? "Couldn't read the map — retrying…" : 'Counting your cats on the map…'}
+                    {mapError ? "Couldn't read the map, retrying…" : 'Counting your cats on the map…'}
                   </p>
                 )}
             </div>

@@ -85,8 +85,8 @@ export default function Shop() {
   // reason into words on the card, which is where the design wants it.
   let blockedReason = '';
   if (!actions.canBuy) {
-    if (full) blockedReason = 'Barracks full — deploy a cat to free a slot.';
-    else if (broke) blockedReason = `Costs ${UNIT_COST} coins — you hold ${coins}.`;
+    if (full) blockedReason = 'Barracks full. Deploy a cat to free a slot.';
+    else if (broke) blockedReason = `Costs ${UNIT_COST} coins. You hold ${coins}.`;
     else blockedReason = 'Recruiting is unavailable right now.';
   }
 
@@ -107,7 +107,7 @@ export default function Shop() {
       <div className="mx-auto flex max-w-[1372px] flex-col items-center">
         <h1 className="font-display text-[34px] font-extrabold text-ink">Adopt a cat</h1>
         <p className="mt-[6px] text-[14px] font-bold text-ink-muted">
-          Every cat costs {UNIT_COST} coins. Each one beats exactly one other — pick to counter your neighbours.
+          Every cat costs {UNIT_COST} coins. Each one beats exactly one other, so pick to counter your neighbours.
         </p>
 
         {/* The three shop states plus the buy notices share one band. `full` is
@@ -155,7 +155,7 @@ export default function Shop() {
             {CYCLE}. Sending a cat that doesn't beat the defender just bounces.
           </p>
           <p className="p-warn flex-none rounded-[20px] px-[18px] py-[14px] text-[13px] font-extrabold">
-            {slotsLeftLabel(remaining)} — deploy cats on the{' '}
+            {slotsLeftLabel(remaining)}. Deploy cats on the{' '}
             <Link className="underline" to="/realm/map">map</Link> to free up room.
           </p>
         </div>

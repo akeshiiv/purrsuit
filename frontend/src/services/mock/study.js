@@ -1,5 +1,5 @@
 import { actionsFor, advanceMockQuest, bumpVersion, clone, mockError, state } from './state.js';
-import { DISTRACTION_REASONS } from '../../focusGuard/contract.js';
+import { DISTRACTION_REASONS } from '../../brainrotDoctor/contract.js';
 
 // Mirrors the server constants: the grace absorbs clock skew and countdown
 // rounding, the claim window bounds how long a finished session stays cashable.
@@ -129,7 +129,7 @@ export async function terminate(input = {}) {
   if (!DISTRACTION_REASONS.includes(input.reason)) {
     throw mockError('INVALID_REASON', 'Unknown distraction reason.', 400);
   }
-  // Burn the row so a session Focus Guard killed can never be completed later.
+  // Burn the row so a session BrainrotDoctor killed can never be completed later.
   const session = findSession(sessionKey);
   if (session && session.status === 'pending') session.status = 'terminated';
   return clone({ logged: true });

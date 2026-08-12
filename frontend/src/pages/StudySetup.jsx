@@ -157,11 +157,11 @@ export default function StudySetup() {
           {realm?.antiCheatEnabled && (
             <div className="p-info rounded-[22px] px-[18px] py-4 shadow-[0_6px_0_#D3E8F4]">
               <h2 className="font-display text-[16px] font-extrabold text-[#2F5F82]">
-                Focus Guard is on
+                BrainrotDoctor is on
               </h2>
               <p className="mt-[5px] text-[12.5px] font-bold text-[#4F7EA0] text-pretty">
                 You&rsquo;ll be asked to share your screen. It&rsquo;s checked on-device for
-                distractions — nothing leaves your computer, and it&rsquo;s required to earn coins
+                distractions. Nothing leaves your computer, and it&rsquo;s required to earn coins
                 this session.
               </p>
             </div>

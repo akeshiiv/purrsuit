@@ -24,7 +24,7 @@ export function createTransformersDetector({ model, dtype, onProgress } = {}) {
     else if (type === 'progress') onProgress && onProgress(progress);
     else if (type === 'result') pending.get(id)?.resolve(verdict);
     else if (type === 'error') {
-      if (message) console.warn('[focus-guard] inference error:', message);
+      if (message) console.warn('[brainrot-doctor] inference error:', message);
       // An init-time error (no request id) must reject `ready`; a per-frame
       // error fails safe to a focused verdict (never fabricate a distraction).
       if (id == null) settleReady(rejectReady, new Error(message || 'model init failed'));
@@ -48,7 +48,7 @@ export function createTransformersDetector({ model, dtype, onProgress } = {}) {
       // so settle whoever is waiting before pulling the worker out from under
       // them — an await on a promise that can never resolve pins the whole
       // capture closure (and the caller's abort check never runs).
-      settleReady(rejectReady, new Error('focus guard disposed'));
+      settleReady(rejectReady, new Error('brainrot doctor disposed'));
       pending.forEach((entry) => entry.resolve(null));
       pending.clear();
       worker.terminate();

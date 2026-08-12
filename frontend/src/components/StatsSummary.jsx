@@ -32,7 +32,7 @@ export default function StatsSummary({ secondsStudied = 0, battlesWon = 0, class
   return (
     <div className={`flex gap-[10px] ${className}`}>
       <Tile label="Studied" value={formatStudy(secondsStudied)} />
-      <Tile label="Streak" value={streak === null ? '—' : `${streak} ${streak === 1 ? 'day' : 'days'}`} />
+      <Tile label="Streak" value={streak === null ? '-' : `${streak} ${streak === 1 ? 'day' : 'days'}`} />
       <Tile label="Battles" value={`${battlesWon} won`} />
     </div>
   );

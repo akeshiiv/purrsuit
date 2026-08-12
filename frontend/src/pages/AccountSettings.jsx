@@ -5,7 +5,7 @@ import Card from '../components/ui/Card.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import Screen from '../components/layout/Screen.jsx';
 import ColourPicker from '../components/settings/ColourPicker.jsx';
-import FocusGuardPanel from '../components/settings/FocusGuardPanel.jsx';
+import BrainrotDoctorPanel from '../components/settings/BrainrotDoctorPanel.jsx';
 import PlayerAvatar from '../components/settings/PlayerAvatar.jsx';
 import { profileService, realmService } from '../services/index.js';
 
@@ -237,7 +237,7 @@ export default function AccountSettings() {
                 {game.season ? ` · season ${game.season.seasonNumber ?? game.season.id}` : ''}
               </p>
 
-              <FocusGuardPanel
+              <BrainrotDoctorPanel
                 canEdit={isAdmin}
                 enabled={Boolean(realm.antiCheatEnabled)}
                 onToggle={toggleAntiCheat}

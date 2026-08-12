@@ -1,9 +1,9 @@
 // Dev-only model spike harness (served by `vite` at /spike.html; not part of the
 // production build, which only inputs index.html). It drives the REAL transformers.js
 // WebGPU worker via createTransformersDetector, so it validates the full pipeline —
-// model load, the Focus Guard prompt, and verdict parsing — on real screenshots.
-import { createTransformersDetector } from './focusGuard/engines/transformers.js';
-import { MODEL_REGISTRY } from './focusGuard/registry.js';
+// model load, the BrainrotDoctor prompt, and verdict parsing — on real screenshots.
+import { createTransformersDetector } from './brainrotDoctor/engines/transformers.js';
+import { MODEL_REGISTRY } from './brainrotDoctor/registry.js';
 
 // 'registry' measures exactly what production ships: the per-module dtype map from
 // the registry entry for this model. The scalar options exist for comparison.

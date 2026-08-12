@@ -9,8 +9,8 @@ const METRICS = {
 };
 
 function tooltip(cell, unit) {
-  if (cell.type === 'water') return 'Water — impassable';
-  if (cell.type === 'obstacle') return 'Rock — impassable';
+  if (cell.type === 'water') return 'Water, impassable';
+  if (cell.type === 'obstacle') return 'Rock, impassable';
   if (unit) return `${unit.name} ×${cell.troopCount}`;
   if (cell.ownerMemberId) return `Held cell (${cell.x}, ${cell.y})`;
   return `Neutral land (${cell.x}, ${cell.y})`;
