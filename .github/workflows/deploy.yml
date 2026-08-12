@@ -52,6 +52,10 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: Production
+    env:
+      # Backward-compatible secret lookup: prefer DATABASE_URL, but allow the
+      # legacy PRODUCTION_DATABASE_URL name still present in some environments.
+      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.PRODUCTION_DATABASE_URL }}
     # Serialize migration runs across overlapping pushes to main. Deliberately
     # NOT cancel-in-progress: interrupting a partially applied run is worse than
     # making the next one queue behind it.
@@ -69,13 +73,17 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      - name: Validate database connection string
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL is not set on the Production environment (or legacy PRODUCTION_DATABASE_URL)."
+            exit 1
+          fi
       # `node migrations/run.js` applies each pending file in its own
       # transaction and calls process.exit(1) on the first failure, so a failed
       # migration fails this job and the deploy jobs below never start.
       - name: Apply pending migrations
         run: npm run migrate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   deploy-backend:
     name: Deploy backend
