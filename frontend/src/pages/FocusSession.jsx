@@ -5,7 +5,7 @@ import NightScreen from '../components/study/NightScreen.jsx';
 import Button from '../components/ui/Button.jsx';
 import CatCircle from '../components/ui/CatCircle.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
-import { useFocusGuard } from '../hooks/useFocusGuard.js';
+import { useBrainrotDoctor } from '../hooks/useBrainrotDoctor.js';
 import { studyService } from '../services/index.js';
 
 function formatTime(totalSeconds) {
@@ -70,9 +70,9 @@ function GuardStatusPill({ monitored, status }) {
   const watching = monitored && status !== 'running-uncredited';
   const label = monitored
     ? (status === 'running-uncredited'
-      ? 'Focus Guard couldn’t start · this session won’t earn coins'
-      : 'Focus Guard watching · screen shared')
-    : 'Focus Guard is off for this realm';
+      ? 'BrainrotDoctor couldn’t start · this session won’t earn coins'
+      : 'BrainrotDoctor watching · screen shared')
+    : 'BrainrotDoctor is off for this realm';
 
   return (
     <div className="flex items-center gap-[10px] rounded-full border-2 border-[rgba(246,231,204,.22)] bg-[rgba(246,231,204,.1)] px-[18px] py-2">
@@ -112,7 +112,7 @@ export default function FocusSession() {
     [],
   );
 
-  const guard = useFocusGuard({
+  const guard = useBrainrotDoctor({
     enabled: monitored,
     durationMinutes: duration,
     getSessionKey,
@@ -247,7 +247,7 @@ export default function FocusSession() {
           </p>
         )}
         <NightNote className="max-w-[300px]" tone="bad">
-          Session ended early — no coins and no study time were earned.
+          Session ended early. No coins and no study time were earned.
         </NightNote>
         <NightGhostButton
           className="mt-6"
@@ -278,7 +278,7 @@ export default function FocusSession() {
         </p>
         <p className="mt-2 max-w-[320px] text-[12.5px] font-bold text-[#7E9EB4] text-pretty">
           Sharing is required to earn coins. If a distraction is detected the session ends early
-          and pays nothing — no coins, no study time.
+          and pays nothing: no coins, no study time.
         </p>
         <NightBlueButton
           className="mt-[22px]"
@@ -343,7 +343,7 @@ export default function FocusSession() {
               Session complete
             </h1>
             <NightNote className="max-w-[320px]">
-              No coins were earned — Focus Guard couldn&rsquo;t verify this session.
+              No coins were earned. BrainrotDoctor couldn&rsquo;t verify this session.
             </NightNote>
           </>
         ) : (

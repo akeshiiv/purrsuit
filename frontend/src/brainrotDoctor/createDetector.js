@@ -2,7 +2,7 @@ import { createMockDetector } from './engines/mock.js';
 import { createPromptApiDetector } from './engines/promptApi.js';
 import { createTransformersDetector } from './engines/transformers.js';
 
-const USE_MOCK = import.meta.env.VITE_FOCUS_GUARD_MOCK === 'true';
+const USE_MOCK = import.meta.env.VITE_BRAINROT_DOCTOR_MOCK === 'true';
 
 // Builds the detector for a resolved engine. Mock overrides everything for dev.
 export function createDetector({ engine, model, dtype, onProgress } = {}) {

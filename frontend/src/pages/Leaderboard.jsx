@@ -230,11 +230,11 @@ export default function Leaderboard() {
         <div className="mt-[18px] flex w-full max-w-[1180px] items-center gap-[10px] border-t-2 border-edge-soft pt-[14px]">
           <span className="p-label">Dev only</span>
           <Button onClick={() => simulateEnd(me.name)} size="sm" variant="plain">
-            End season — I win
+            End season: I win
           </Button>
           {otherChampion && (
             <Button onClick={() => simulateEnd(otherChampion)} size="sm" variant="plain">
-              End season — I lose
+              End season: I lose
             </Button>
           )}
         </div>

@@ -86,7 +86,7 @@ export default function SeasonEndOverlay({ winnerName, rows = [], me, onAck, ack
             style={{ animationDelay: '240ms' }}
           >
             {victory
-              ? 'Congrats — you were the most locked in this season.'
+              ? 'Congrats! You were the most locked in this season.'
               : winnerName
                 ? `${winnerName} took this one. Your cats fought well.`
                 : 'Nobody claimed this season. Your cats fought well.'}

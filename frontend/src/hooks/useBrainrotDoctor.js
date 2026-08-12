@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { initState, transition, shouldComplete } from '../focusGuard/machine.js';
-import { createScheduler } from '../focusGuard/scheduler.js';
-import { createCaptureController } from '../focusGuard/capture.js';
-import { selectEngine } from '../focusGuard/selectEngine.js';
-import { createDetector } from '../focusGuard/createDetector.js';
+import { initState, transition, shouldComplete } from '../brainrotDoctor/machine.js';
+import { createScheduler } from '../brainrotDoctor/scheduler.js';
+import { createCaptureController } from '../brainrotDoctor/capture.js';
+import { selectEngine } from '../brainrotDoctor/selectEngine.js';
+import { createDetector } from '../brainrotDoctor/createDetector.js';
 import { studyService } from '../services/index.js';
 
 // Ceiling on how long the credit decision waits for a capture that is still
@@ -18,7 +18,7 @@ const noRemaining = () => null;
 
 // Orchestrates consent -> warmup -> scheduled capture -> verdict over the pure
 // machine. Everything here is side effects; the decision logic is in machine.js.
-export function useFocusGuard({
+export function useBrainrotDoctor({
   enabled,
   durationMinutes,
   getSessionKey = noSessionKey,
@@ -82,7 +82,7 @@ export function useFocusGuard({
       // A frame that fails to grab or analyse is a missing sample and nothing
       // more. Swallowing it keeps one hiccup from ending monitoring for the rest
       // of the session, and keeps it from escaping the scheduler unhandled.
-      console.warn('[focus-guard] capture failed:', caught?.message ?? caught);
+      console.warn('[brainrot-doctor] capture failed:', caught?.message ?? caught);
     } finally {
       bitmap?.close?.();
     }
@@ -184,7 +184,7 @@ function awaitFinalAnalysis(inFlight) {
 
 // Fire-and-forget termination log (never blocks UX; failure is non-fatal). The
 // session key goes along so the server can burn the row in the same breath — a
-// session Focus Guard killed must never be completable afterwards.
+// session BrainrotDoctor killed must never be completable afterwards.
 function studyServiceTerminate(durationMinutes, sessionKey, verdict) {
   studyService.terminate({
     durationMinutes,

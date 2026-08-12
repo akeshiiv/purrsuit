@@ -98,7 +98,7 @@ export default function MapView() {
           <div className="mt-[14px] flex h-5 items-center gap-4 text-[12.5px] font-extrabold">
             {result && <span className="text-good-ink">Last action: {RESULT_LABEL[result] ?? result}</span>}
             {questNotice && <span className="text-[#C9862B]">{questNotice}</span>}
-            {error && <span className="text-danger-ink" role="alert">Couldn't refresh — retrying...</span>}
+            {error && <span className="text-danger-ink" role="alert">Couldn't refresh, retrying...</span>}
           </div>
         </div>
 

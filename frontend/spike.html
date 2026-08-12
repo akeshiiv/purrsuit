@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Focus Guard — Model Spike</title>
+    <title>BrainrotDoctor Model Spike</title>
     <style>
       body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #0f172a; }
       h1 { font-size: 1.4rem; }
@@ -20,10 +20,10 @@
     </style>
   </head>
   <body>
-    <h1>Focus Guard — Model Spike</h1>
+    <h1>BrainrotDoctor Model Spike</h1>
     <p>
       Validates an on-device vision model on real screenshots, exercising the real
-      transformers.js WebGPU worker + Focus Guard's prompt and verdict parser. Needs a
+      transformers.js WebGPU worker + BrainrotDoctor's prompt and verdict parser. Needs a
       WebGPU browser (Chrome/Edge). First load downloads model weights (~0.3–1&nbsp;GB) to
       IndexedDB, then caches. Drop a mix of clearly-studying and clearly-distracting
       screens; watch the <code>distracted</code> verdict, the summary/justification, and latency.
@@ -38,14 +38,14 @@
       </label>
       <label>dtype:
         <select id="dtype">
-          <option value="registry">per-module (registry — what ships)</option>
+          <option value="registry">per-module (registry, what ships)</option>
           <option value="q4">q4 (all modules)</option>
           <option value="fp16">fp16 (all modules)</option>
           <option value="q8">q8 (all modules)</option>
         </select>
       </label>
       <button id="load" type="button">Load model</button>
-      <span id="status">idle — pick a model and load</span>
+      <span id="status">idle, pick a model and load</span>
     </div>
     <div id="drop">Drop screenshots here (or click to pick)</div>
     <input id="file" type="file" accept="image/*" multiple hidden />

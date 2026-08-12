@@ -109,18 +109,18 @@ export default function DeployModal({
       ? (defenderName
         ? `${defenderName} holds this cell`
         : `Enemy holds ${defenderUnit ? defenderUnit.name : 'this cell'} × ${cell.troopCount}`)
-      : 'Neutral land — nobody is defending')
+      : 'Neutral land, nobody is defending')
     : 'Add another cat to a cell you already hold';
 
   let verdict = 'Reinforcing keeps this cell yours for longer.';
   let tone = 'info';
   if (attacking && !defended) {
-    verdict = 'Neutral land — any cat claims it.';
+    verdict = 'Neutral land. Any cat claims it.';
   } else if (attacking && beatsIt) {
-    verdict = `${attackerUnit.name} beats ${defenderUnit.name} — captures if you send ${cell.troopCount} or more.`;
+    verdict = `${attackerUnit.name} beats ${defenderUnit.name}. Captures if you send ${cell.troopCount} or more.`;
     tone = 'good';
   } else if (attacking) {
-    verdict = `${attackerUnit.name} does not beat ${defenderUnit.name} — this attack bounces, however many you send.`;
+    verdict = `${attackerUnit.name} does not beat ${defenderUnit.name}. This attack bounces, however many you send.`;
     tone = 'bad';
   }
 
@@ -181,7 +181,7 @@ export default function DeployModal({
             </p>
           ) : maxQuantity < 1 ? (
             <p className="mt-3 text-[12.5px] font-extrabold text-danger-ink">
-              You hold no {attackerUnit.name} — pick a cat you have.
+              You hold no {attackerUnit.name}. Pick a cat you have.
             </p>
           ) : (
             <>
@@ -212,7 +212,7 @@ export default function DeployModal({
                 <p className="mt-2 text-[11.5px] font-extrabold text-ink-muted">
                   {willCapture
                     ? 'That takes the cell.'
-                    : `Send ${cell.troopCount} or more to take it — ${safeQuantity} only thins them out.`}
+                    : `Send ${cell.troopCount} or more to take it. ${safeQuantity} only thins them out.`}
                 </p>
               )}
             </>
@@ -224,12 +224,12 @@ export default function DeployModal({
             {verdict}
           </p>
           <p className="mt-2 text-[11.5px] font-extrabold text-ink-muted">
-            Sends 1 {defenderUnit ? defenderUnit.name : 'cat'} — reinforcements match the cats already there.
+            Sends 1 {defenderUnit ? defenderUnit.name : 'cat'}. Reinforcements match the cats already there.
             You hold {held(units, cell.unitType)}.
           </p>
           {held(units, cell.unitType) < 1 && (
             <p className="mt-2 text-[12.5px] font-extrabold text-danger-ink">
-              You hold no {defenderUnit ? defenderUnit.name : 'cats'} — buy one in the shop first.
+              You hold no {defenderUnit ? defenderUnit.name : 'cats'}. Buy one in the shop first.
             </p>
           )}
         </>

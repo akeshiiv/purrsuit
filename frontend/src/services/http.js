@@ -8,7 +8,7 @@ import { apiFetch } from './api.js';
  * replacement belongs here rather than at ~20 call sites.
  */
 function networkError() {
-  const error = new Error("Can't reach Purrsuit — check your connection and try again.");
+  const error = new Error("Can't reach Purrsuit. Check your connection and try again.");
   error.code = 'NETWORK_UNREACHABLE';
   return error;
 }
