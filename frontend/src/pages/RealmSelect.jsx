@@ -16,6 +16,26 @@ const DECOR = [
 
 const JOIN_CODE_LENGTH = 6;
 
+/**
+ * The server's join failures are accurate but terse, and none of them say what
+ * to do next. Join codes are generated once at realm creation and never rotate
+ * (there is no regenerate endpoint), so a code that doesn't resolve was mistyped
+ * or belongs to a realm that is gone — it did not "expire". The copy says that
+ * rather than implying a code the user could refresh.
+ */
+const JOIN_ERRORS = {
+  REALM_NOT_FOUND:
+    'No realm uses that code. Codes are 6 characters and never change, so check it with whoever invited you.',
+  SEASON_ENDED:
+    'That realm is between seasons right now. Ask the admin to start the next one, then try the code again.',
+  REALM_FULL: 'That realm is full. Ask the admin to make room, or start your own realm instead.',
+  ALREADY_IN_REALM: 'You are already in a realm. Leave it first to join another.',
+};
+
+function joinErrorMessage(caught) {
+  return JOIN_ERRORS[caught?.code] ?? caught?.message ?? 'Could not join that realm.';
+}
+
 function monogram(name) {
   const words = String(name ?? '').trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return '??';
@@ -122,7 +142,7 @@ export default function RealmSelect() {
 
   async function handleJoin(event) {
     event.preventDefault();
-    if (joining || joinCode.length !== JOIN_CODE_LENGTH) return;
+    if (current?.realm || joining || joinCode.length !== JOIN_CODE_LENGTH) return;
     setError('');
     setJoining(true);
 
@@ -130,7 +150,9 @@ export default function RealmSelect() {
       await realmService.join({ joinCode });
       navigate('/realm');
     } catch (caught) {
-      setError(caught.message);
+      // The code stays in the field: every one of these is recoverable by
+      // retrying or retyping, and clearing it would hide the typo.
+      setError(joinErrorMessage(caught));
       setJoining(false);
     }
   }
@@ -144,6 +166,12 @@ export default function RealmSelect() {
   }
 
   const realm = current?.realm ?? null;
+  // One realm at a time is a server rule (ALREADY_IN_REALM, 409). Create and join
+  // stay on screen so the card still reads as the design draws it, but they go
+  // inert with the reason stated inline — the same disabled-with-reason pattern
+  // the shop uses at the 6-cat cap, rather than letting a user fill out the
+  // create form and only learn the rule from a 409 on submit.
+  const inRealm = Boolean(realm);
   const displayName = profile?.name ?? current?.me?.name ?? '';
   const codeTooShort = joinCode.length > 0 && joinCode.length < JOIN_CODE_LENGTH;
 
@@ -192,7 +220,7 @@ export default function RealmSelect() {
         </div>
 
         <Card className="w-[460px] max-w-full px-[30px] pt-[30px] pb-8" variant="hero">
-          <p className="p-label">Your realms</p>
+          <p className="p-label">Your realm</p>
 
           {realm ? (
             <div className="mt-[14px] flex flex-col gap-[10px]">
@@ -235,21 +263,28 @@ export default function RealmSelect() {
           </div>
 
           <div className="flex flex-col gap-[11px]">
-            <Button full onClick={() => navigate('/realms/create')} style={{ padding: '14px' }} variant="gold">
+            <Button
+              disabled={inRealm}
+              full
+              onClick={() => navigate('/realms/create')}
+              style={{ padding: '14px' }}
+              variant="gold"
+            >
               Create a realm
             </Button>
             <form className="flex gap-[9px]" onSubmit={handleJoin}>
               <input
                 aria-label="Realm join code"
                 autoComplete="off"
-                className="p-input flex-1 bg-sunk font-display text-[18px] tracking-[0.22em] uppercase"
+                className="p-input flex-1 bg-sunk font-display text-[18px] tracking-[0.22em] uppercase disabled:cursor-not-allowed disabled:opacity-[.45]"
+                disabled={inRealm}
                 maxLength="6"
                 onChange={event => setJoinCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                 placeholder="CODE"
                 value={joinCode}
               />
               <Button
-                disabled={joining || joinCode.length !== JOIN_CODE_LENGTH}
+                disabled={inRealm || joining || joinCode.length !== JOIN_CODE_LENGTH}
                 style={{ padding: '0 22px', fontSize: '18px', borderRadius: '18px' }}
                 type="submit"
                 variant="blue"
@@ -257,7 +292,11 @@ export default function RealmSelect() {
                 {joining ? 'Joining...' : 'Join'}
               </Button>
             </form>
-            {codeTooShort && (
+            {inRealm ? (
+              <p className="text-[11.5px] font-bold text-ink-muted-soft [text-wrap:pretty]">
+                You can only be in one realm at a time. Leave {realm.name} first to create or join another.
+              </p>
+            ) : codeTooShort && (
               <p className="text-[11.5px] font-bold text-ink-muted-soft">Join codes are 6 characters.</p>
             )}
           </div>

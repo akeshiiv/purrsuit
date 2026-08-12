@@ -6,6 +6,7 @@ import CatCircle from '../components/ui/CatCircle.jsx';
 import CoinPill from '../components/ui/CoinPill.jsx';
 import {
   MAX_UNITS,
+  UNIT_COST,
   UNIT_META,
   UNIT_ORDER,
 } from '../components/units.js';
@@ -118,6 +119,11 @@ export default function Inventory() {
   }
 
   const slots = buildSlots(inventory.units);
+  // A brand-new player sees six dashed slots and no other explanation. The empty
+  // slots already carry the 6-cap; what they don't say is how a cat is obtained,
+  // so the zero case gets that once rather than leaving the screen to be read as
+  // something that failed to load.
+  const noCats = inventory.total === 0;
 
   return (
     <Screen bodyClassName="flex items-center justify-center" right={<CoinPill coins={inventory.coins} />}>
@@ -132,6 +138,12 @@ export default function Inventory() {
                 <BarracksSlot key={index} unitType={unitType} />
               ))}
             </div>
+            {noCats && (
+              <p className="mt-[18px] text-center text-[13.5px] font-bold text-ink-muted text-pretty">
+                No cats yet — every slot is open. Study to earn coins, then adopt your first cat
+                from the shop for {UNIT_COST}.
+              </p>
+            )}
           </Card>
         </div>
 
@@ -162,7 +174,9 @@ export default function Inventory() {
           </Link>
 
           <p className="rounded-[18px] border-2 border-edge-soft bg-[#F7EBD6] px-4 py-[14px] text-[12.5px] font-bold text-ink-muted text-pretty">
-            Cats in the barracks do nothing. Send them to the map to hold ground and earn territory.
+            {noCats
+              ? `Cats cost ${UNIT_COST} coins each, earned by studying. You can house up to ${MAX_UNITS}.`
+              : 'Cats in the barracks do nothing. Send them to the map to hold ground and earn territory.'}
           </p>
         </div>
       </div>
