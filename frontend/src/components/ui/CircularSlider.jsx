@@ -1,7 +1,21 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+
+// The session dial: a conic-gradient arc over a track ring, with the value
+// reading out in the cream well inside it. Three ways to drive it — drag the
+// ring, arrow keys, or the +/- and preset buttons the caller renders alongside.
+// The arc sweeps clockwise from 12 o'clock, which is where `conic-gradient`
+// starts and where the pointer maths below measures from.
+const ARC = '#E9A62C';
+const TRACK = '#EFE0C2';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+// Snap to the step grid measured from `min`, so a 5-120/5 dial can never land
+// on a value the +/- buttons could not also reach.
+function snap(value, min, step) {
+  return min + Math.round((value - min) / step) * step;
 }
 
 export default function CircularSlider({
@@ -10,86 +24,95 @@ export default function CircularSlider({
   step = 5,
   value,
   onChange,
+  size = 270,
+  ring = 16,
+  label = 'Session length in minutes',
+  unit = 'minutes',
 }) {
-  const svgRef = useRef(null);
+  const dialRef = useRef(null);
   const [dragging, setDragging] = useState(false);
-  const percent = (value - min) / (max - min);
-  const circumference = 2 * Math.PI * 44;
-  const dashOffset = circumference * (1 - percent);
-  const marks = useMemo(() => [25, 50, 60].filter(mark => mark >= min && mark <= max), [max, min]);
+
+  const fraction = (clamp(value, min, max) - min) / (max - min);
+  const arcDegrees = Math.round(fraction * 360);
+
+  const commit = next => {
+    const stepped = clamp(snap(next, min, step), min, max);
+    if (stepped !== value) onChange(stepped);
+  };
+
+  // Angle from the dial's centre, measured clockwise from the top.
+  const angleFromPointer = event => {
+    const rect = dialRef.current.getBoundingClientRect();
+    const dx = event.clientX - (rect.left + rect.width / 2);
+    const dy = event.clientY - (rect.top + rect.height / 2);
+    const degrees = (Math.atan2(dy, dx) * 180) / Math.PI;
+    return { clockwiseFromTop: (degrees + 450) % 360, distance: Math.hypot(dx, dy) };
+  };
 
   const updateFromPointer = event => {
-    const rect = svgRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const radians = Math.atan2(event.clientY - centerY, event.clientX - centerX);
-    const degrees = (radians * 180) / Math.PI;
-    const clockwiseFromTop = (degrees + 450) % 360;
-    const raw = min + (clockwiseFromTop / 360) * (max - min);
-    const stepped = Math.round(raw / step) * step;
-    onChange(clamp(stepped, min, max));
+    const { clockwiseFromTop } = angleFromPointer(event);
+    commit(min + (clockwiseFromTop / 360) * (max - min));
+  };
+
+  const onKeyDown = event => {
+    const jump = { ArrowRight: step, ArrowUp: step, ArrowLeft: -step, ArrowDown: -step };
+    if (event.key in jump) {
+      event.preventDefault();
+      commit(value + jump[event.key]);
+      return;
+    }
+    if (event.key === 'Home') {
+      event.preventDefault();
+      commit(min);
+      return;
+    }
+    if (event.key === 'End') {
+      event.preventDefault();
+      commit(max);
+    }
   };
 
   return (
-    <div className="inline-flex flex-col items-center gap-2">
-      <svg
-        ref={svgRef}
-        className="touch-none"
-        height="180"
-        onPointerDown={event => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          setDragging(true);
-          updateFromPointer(event);
-        }}
-        onPointerMove={event => {
-          if (dragging) updateFromPointer(event);
-        }}
-        onPointerUp={() => setDragging(false)}
-        viewBox="0 0 120 120"
-        width="180"
-      >
-        <circle cx="60" cy="60" fill="white" r="54" stroke="#cbd5e1" strokeWidth="2" />
-        <circle
-          cx="60"
-          cy="60"
-          fill="none"
-          r="44"
-          stroke="#2563eb"
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
-          strokeLinecap="round"
-          strokeWidth="8"
-          transform="rotate(-90 60 60)"
-        />
-        {marks.map(mark => {
-          const angle = ((mark - min) / (max - min)) * 360 - 90;
-          const radians = (angle * Math.PI) / 180;
-          const x = 60 + Math.cos(radians) * 44;
-          const y = 60 + Math.sin(radians) * 44;
-          return <circle key={mark} cx={x} cy={y} fill="#0f172a" r="2" />;
-        })}
-        <text
-          dominantBaseline="middle"
-          fill="#0f172a"
-          fontSize="18"
-          fontWeight="700"
-          textAnchor="middle"
-          x="60"
-          y="56"
-        >
-          {value}
-        </text>
-        <text
-          dominantBaseline="middle"
-          fill="#475569"
-          fontSize="9"
-          textAnchor="middle"
-          x="60"
-          y="72"
-        >
-          min
-        </text>
-      </svg>
+    <div
+      ref={dialRef}
+      aria-label={label}
+      aria-valuemax={max}
+      aria-valuemin={min}
+      aria-valuenow={value}
+      aria-valuetext={`${value} ${unit}`}
+      className="touch-none rounded-full shadow-[0_8px_0_var(--color-warm-deep)] focus-visible:[outline:3px_solid_var(--color-edge-strong)] focus-visible:[outline-offset:6px]"
+      onKeyDown={onKeyDown}
+      onPointerDown={event => {
+        // Only the arc band grabs. The well inside holds the readout, and a
+        // press there would otherwise fling the value to wherever the number
+        // happens to sit relative to the centre.
+        const { distance } = angleFromPointer(event);
+        if (distance < size / 2 - ring) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setDragging(true);
+        updateFromPointer(event);
+      }}
+      onPointerMove={event => {
+        if (dragging) updateFromPointer(event);
+      }}
+      onPointerCancel={() => setDragging(false)}
+      onPointerUp={() => setDragging(false)}
+      role="slider"
+      style={{
+        width: size,
+        height: size,
+        padding: ring,
+        background: `conic-gradient(${ARC} ${arcDegrees}deg, ${TRACK} ${arcDegrees}deg)`,
+        cursor: dragging ? 'grabbing' : 'pointer',
+      }}
+      tabIndex={0}
+    >
+      <div className="flex size-full flex-col items-center justify-center rounded-full border-3 border-edge-soft bg-raised select-none">
+        <span className="p-nums text-[72px] leading-none text-ink">{value}</span>
+        <span className="text-[13px] font-extrabold tracking-[.16em] text-ink-muted-soft uppercase">
+          {unit}
+        </span>
+      </div>
     </div>
   );
 }

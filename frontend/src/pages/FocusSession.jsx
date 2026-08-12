@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useGame } from '../components/GameContext.jsx';
+import NightScreen from '../components/study/NightScreen.jsx';
 import Button from '../components/ui/Button.jsx';
+import CatCircle from '../components/ui/CatCircle.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import { useFocusGuard } from '../hooks/useFocusGuard.js';
 import { studyService } from '../services/index.js';
@@ -12,10 +14,75 @@ function formatTime(totalSeconds) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function FocusShell({ children }) {
+// Outlined, low-emphasis action on a night background — the way out of a
+// session, never the thing the eye lands on first.
+const GHOST_TONES = {
+  warm: 'border-[rgba(246,231,204,.3)] text-[#E4CFA8] hover:bg-[rgba(246,231,204,.08)]',
+  fail: 'border-[rgba(246,217,204,.32)] text-[#F0C8B8] hover:bg-[rgba(246,217,204,.08)]',
+  cool: 'border-[rgba(220,235,246,.28)] text-[#B9D3E4] hover:bg-[rgba(220,235,246,.08)]',
+};
+
+function NightGhostButton({ children, className = '', style, tone = 'warm', ...props }) {
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-center gap-6 bg-slate-950 px-4 text-center text-white">
+    <Button
+      className={`bg-transparent shadow-none ${GHOST_TONES[tone] ?? GHOST_TONES.warm} ${className}`}
+      style={{ padding: '13px 34px', fontSize: 17, ...style }}
+      variant="plain"
+      {...props}
+    >
       {children}
+    </Button>
+  );
+}
+
+function NightBlueButton({ children, className = '', style, ...props }) {
+  return (
+    <Button
+      className={`text-[#12314F] shadow-[0_5px_0_#416F9B] active:shadow-[0_2px_0_#416F9B] ${className}`}
+      style={{ padding: '12px 28px', fontSize: 17, ...style }}
+      variant="blue"
+      {...props}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function NightNote({ children, className = '', tone = 'warn', ...props }) {
+  const tones = {
+    warn: 'border-[rgba(233,200,127,.34)] bg-[rgba(233,200,127,.14)] text-gold',
+    bad: 'border-[rgba(224,110,86,.32)] bg-[rgba(224,110,86,.14)] text-[#F0B3A0]',
+  };
+  return (
+    <p
+      className={`mt-[14px] rounded-[14px] border-2 px-[14px] py-[10px] text-[12.5px] font-extrabold text-pretty ${tones[tone] ?? tones.warn} ${className}`}
+      {...props}
+    >
+      {children}
+    </p>
+  );
+}
+
+// What the guard is actually doing right now. The design draws the happy path —
+// a live, watched, shared session — and this must never claim that when the
+// share never started or the realm doesn't monitor at all.
+function GuardStatusPill({ monitored, status }) {
+  const watching = monitored && status !== 'running-uncredited';
+  const label = monitored
+    ? (status === 'running-uncredited'
+      ? 'Focus Guard couldn’t start · this session won’t earn coins'
+      : 'Focus Guard watching · screen shared')
+    : 'Focus Guard is off for this realm';
+
+  return (
+    <div className="flex items-center gap-[10px] rounded-full border-2 border-[rgba(246,231,204,.22)] bg-[rgba(246,231,204,.1)] px-[18px] py-2">
+      <span
+        aria-hidden="true"
+        className={`block size-[11px] rounded-full ${watching ? 'p-pulse-dot bg-[#7ED09B]' : 'bg-[rgba(246,231,204,.45)]'}`}
+      />
+      <span className="text-[12.5px] font-extrabold tracking-[.12em] text-[#E4CFA8] uppercase">
+        {label}
+      </span>
     </div>
   );
 }
@@ -133,97 +200,237 @@ export default function FocusSession() {
 
   if (startError !== null) {
     return (
-      <FocusShell>
-        <p className="text-xl font-semibold text-red-300">Couldn&rsquo;t start your session</p>
-        <p className="text-sm text-slate-300">{startError}</p>
-        <p className="text-xs text-slate-400">
+      <NightScreen tone="warm">
+        <CatCircle
+          className="border-[rgba(246,231,204,.35)] bg-surface [&>img]:opacity-85"
+          size={120}
+          tone="night"
+          unitType="B"
+        />
+        <h1 className="mt-5 font-display text-[27px] font-extrabold text-night-display">
+          Couldn&rsquo;t start your session
+        </h1>
+        <NightNote className="max-w-[320px]" role="alert" tone="bad">{startError}</NightNote>
+        <p className="mt-3 max-w-[320px] text-[13.5px] font-bold text-night-muted text-pretty">
           Nothing was recorded, so nothing was lost. Start the session again.
         </p>
-        <Button onClick={() => navigate('/realm/study')}>Back to study</Button>
-      </FocusShell>
+        <NightBlueButton className="mt-6" onClick={() => navigate('/realm/study')}>
+          Back to study
+        </NightBlueButton>
+      </NightScreen>
     );
   }
 
+  // Termination outranks the countdown reaching zero: a session the guard killed
+  // pays nothing, and the user has to be told why rather than shown a reward
+  // screen with the coins missing.
   if (guard.status === 'terminated') {
     return (
-      <FocusShell>
-        <p className="text-2xl font-semibold text-red-300">Session ended — distraction detected</p>
-        <p className="text-sm text-slate-300">{guard.verdict?.summary}</p>
-        <p className="text-sm text-amber-200">{guard.verdict?.justification}</p>
-        <p className="text-xs text-slate-400">No coins or study time were earned.</p>
-        <Button onClick={() => navigate('/realm')}>Back to dashboard</Button>
-      </FocusShell>
+      <NightScreen tone="fail">
+        <CatCircle
+          className="border-[rgba(224,110,86,.6)] bg-surface [&>img]:opacity-80"
+          size={120}
+          tone="night"
+          unitType="B"
+        />
+        <h1 className="mt-5 font-display text-[27px] font-extrabold text-[#FFD9CC]">
+          Distraction detected
+        </h1>
+        {guard.verdict?.summary && (
+          <p className="mt-[10px] max-w-[300px] text-[13.5px] font-bold text-[#D8A895] text-pretty">
+            {guard.verdict.summary}
+          </p>
+        )}
+        {guard.verdict?.justification && (
+          <p className="mt-[6px] max-w-[300px] text-[12.5px] font-bold text-[#BF9382] text-pretty">
+            {guard.verdict.justification}
+          </p>
+        )}
+        <NightNote className="max-w-[300px]" tone="bad">
+          Session ended early — no coins and no study time were earned.
+        </NightNote>
+        <NightGhostButton
+          className="mt-6"
+          onClick={() => navigate('/realm')}
+          style={{ padding: '12px 28px' }}
+          tone="fail"
+        >
+          Back to dashboard
+        </NightGhostButton>
+      </NightScreen>
     );
   }
 
   if (monitored && guard.status === 'awaiting-consent') {
     return (
-      <FocusShell>
-        <p className="text-2xl font-semibold">Focus Guard is on — share your screen to earn</p>
-        <p className="max-w-md text-sm text-slate-300">
-          This realm checks your screen on-device for distractions. Share your screen to
-          start your session; nothing leaves your device, and it&rsquo;s required to earn coins.
+      <NightScreen tone="cool">
+        <CatCircle
+          className="border-dashed border-[rgba(140,199,228,.6)] bg-[#F4FAFD] [&>img]:opacity-85"
+          size={120}
+          tone="night"
+          unitType="C"
+        />
+        <h1 className="mt-5 font-display text-[26px] font-extrabold text-[#EAF6FF]">
+          Share your screen to earn
+        </h1>
+        <p className="mt-[10px] max-w-[320px] text-[13.5px] font-bold text-[#9FBDD2] text-pretty">
+          This realm checks your screen on-device for distractions. Nothing leaves your computer.
         </p>
-        <Button onClick={guard.consent}>Share screen &amp; start</Button>
-        <Button onClick={() => navigate('/realm')} variant="secondary">
+        <p className="mt-2 max-w-[320px] text-[12.5px] font-bold text-[#7E9EB4] text-pretty">
+          Frames are checked locally on your machine — sharing is required to earn coins this
+          session.
+        </p>
+        <NightBlueButton
+          className="mt-[22px]"
+          onClick={guard.consent}
+          style={{ padding: '13px 30px', fontSize: 18 }}
+        >
+          Share screen &amp; start
+        </NightBlueButton>
+        <NightGhostButton
+          className="mt-3"
+          onClick={() => navigate('/realm')}
+          style={{ padding: '10px 24px', fontSize: 15 }}
+          tone="cool"
+        >
           Cancel
-        </Button>
-      </FocusShell>
+        </NightGhostButton>
+      </NightScreen>
     );
   }
 
   if (phase === 'done') {
+    const paid = reward !== null && !reward.error && !reward.uncredited;
     return (
-      <FocusShell>
+      <NightScreen tone="warm">
         {reward === null ? (
           // Both the last verdict and the /complete round trip land here, so this
           // is a real wait, not a flash — never show a reward that isn't settled.
-          <p className="text-2xl font-semibold">Wrapping up your session&hellip;</p>
+          <>
+            <CatCircle
+              bob
+              className="border-[rgba(242,206,126,.65)] bg-raised"
+              size={120}
+              tone="night"
+              unitType="A"
+            />
+            <h1 className="mt-5 font-display text-[30px] font-extrabold text-night-display">
+              Wrapping up your session&hellip;
+            </h1>
+          </>
         ) : reward.error ? (
           <>
-            <p className="text-xl font-semibold text-red-300">Couldn&rsquo;t record your session</p>
-            <p className="text-sm text-slate-300">{reward.error}</p>
+            <CatCircle
+              className="border-[rgba(246,231,204,.35)] bg-surface [&>img]:opacity-80"
+              size={120}
+              tone="night"
+              unitType="B"
+            />
+            <h1 className="mt-5 font-display text-[27px] font-extrabold text-night-display">
+              Couldn&rsquo;t record your session
+            </h1>
+            <NightNote className="max-w-[320px]" role="alert" tone="bad">{reward.error}</NightNote>
           </>
         ) : reward.uncredited ? (
           <>
-            <p className="text-2xl font-semibold text-amber-300">Session complete</p>
-            <p className="text-sm text-slate-300">
+            <CatCircle
+              className="border-[rgba(246,231,204,.35)] bg-surface [&>img]:opacity-80"
+              size={120}
+              tone="night"
+              unitType="A"
+            />
+            <h1 className="mt-5 font-display text-[30px] font-extrabold text-night-display">
+              Session complete
+            </h1>
+            <NightNote className="max-w-[320px]">
               No coins were earned — Focus Guard couldn&rsquo;t verify this session.
-            </p>
+            </NightNote>
           </>
         ) : (
           <>
-            <p className="text-2xl font-semibold text-emerald-300">Session complete!</p>
-            <p className="text-xl">+{reward?.gained} coins</p>
-            <p className="text-sm text-slate-300">Balance: {reward?.coins} coins</p>
-            {reward?.questCompleted && (
-              <p className="text-lg font-semibold text-amber-300">
+            <CatCircle
+              bob
+              className="border-[rgba(242,206,126,.65)] bg-raised"
+              size={120}
+              tone="night"
+              unitType="A"
+            />
+            <h1 className="mt-5 font-display text-[30px] font-extrabold text-night-display">
+              Session complete!
+            </h1>
+            <p className="p-nums mt-[14px] rounded-full border-3 border-[#C08D45] bg-gold px-[22px] py-[9px] text-[26px] text-ink">
+              +{reward.gained} coins
+            </p>
+            <p className="mt-3 text-[14px] font-bold text-night-muted">
+              Balance: {reward.coins} coins
+            </p>
+            {reward.questCompleted && (
+              <p className="mt-[10px] rounded-[14px] border-2 border-[rgba(242,206,126,.3)] bg-[rgba(242,206,126,.14)] px-4 py-2 text-[12.5px] font-extrabold text-gold">
                 Quest complete! +{reward.questCompleted.reward} coins · {reward.questCompleted.title}
               </p>
             )}
           </>
         )}
-        <Button onClick={() => navigate('/realm')}>Back to dashboard</Button>
-      </FocusShell>
+
+        {paid ? (
+          <NightBlueButton className="mt-6" onClick={() => navigate('/realm')}>
+            Back to the map
+          </NightBlueButton>
+        ) : (
+          <NightGhostButton
+            className="mt-6"
+            onClick={() => navigate('/realm')}
+            style={{ padding: '12px 28px' }}
+          >
+            Back to dashboard
+          </NightGhostButton>
+        )}
+      </NightScreen>
     );
   }
 
+  const elapsedPercent = Math.min(100, Math.max(0, ((totalSeconds - remaining) / totalSeconds) * 100));
+
   return (
-    <FocusShell>
-      <p className="font-mono text-7xl tabular-nums">{formatTime(remaining)}</p>
-      <p className="text-sm text-slate-300">until you earn {duration * 4} coins</p>
-      <Button onClick={() => setDialogOpen(true)} variant="secondary">
-        Cancel
-      </Button>
+    <NightScreen tone="warm">
+      <GuardStatusPill monitored={monitored} status={guard.status} />
+
+      <p className="p-nums mt-[34px] text-[170px] leading-none tracking-[.02em] text-night-display">
+        {formatTime(remaining)}
+      </p>
+      <p className="mt-2 text-[17px] font-bold text-night-muted">
+        until you earn <span className="font-extrabold text-gold">{duration * 4} coins</span>
+      </p>
+
+      <div className="mt-9 h-4 w-[520px] overflow-hidden rounded-full bg-[rgba(246,231,204,.14)]">
+        <div
+          className="h-full rounded-full bg-linear-to-r from-gold-pale to-gold-deep transition-[width] duration-200 ease-linear"
+          style={{ width: `${elapsedPercent}%` }}
+        />
+      </div>
+
+      <CatCircle
+        bob
+        className="mt-11 border-dashed border-[rgba(246,231,204,.5)] bg-surface [&>img]:opacity-85"
+        size={150}
+        tone="night"
+        unitType="A"
+      />
+
+      <NightGhostButton className="mt-10" onClick={() => setDialogOpen(true)}>
+        Cancel session
+      </NightGhostButton>
+
       {import.meta.env.DEV && (
         <button
-          className="text-xs text-slate-500 underline"
+          className="mt-4 text-[12px] font-bold text-[rgba(246,231,204,.45)] underline"
           onClick={finishSession}
           type="button"
         >
           dev: skip to end
         </button>
       )}
+
       <ConfirmDialog
         confirmLabel="Cancel focus"
         message="Cancel this focus session?"
@@ -235,6 +442,6 @@ export default function FocusSession() {
         secondTitle="Forfeit reward"
         title="Cancel focus"
       />
-    </FocusShell>
+    </NightScreen>
   );
 }
