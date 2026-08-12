@@ -1,14 +1,26 @@
 export const FIVE_MIN_MS = 300_000;
 
+// How much of the session tail is kept clear of captures. A verdict that only
+// lands after the countdown has already hit zero is no evidence at all, so the
+// last capture has to be fired early enough for its inference to come back —
+// on-device VLM inference was measured in single-digit seconds.
+export const TAIL_RESERVE_MS = 20_000;
+
 // One capture per rolling 5-min window, at a uniform-random offset inside each
 // window. The final window may be shorter than 5 min; it still gets one capture.
-export function computeCaptureTimes(durationMs, random = Math.random) {
+export function computeCaptureTimes(durationMs, random = Math.random, reserveMs = TAIL_RESERVE_MS) {
   const times = [];
   for (let start = 0; start < durationMs; start += FIVE_MIN_MS) {
-    const end = Math.min(start + FIVE_MIN_MS, durationMs);
-    const span = end - start;
+    const windowEnd = Math.min(start + FIVE_MIN_MS, durationMs);
+    const span = windowEnd - start;
     if (span <= 0) break;
-    times.push(start + random() * span);
+    // The reserve may never eat more than half of a window. A 5-minute session
+    // has exactly one window, and dropping (or crushing) its only capture would
+    // leave every short monitored session uncredited — the honest-user failure
+    // the reserve exists to prevent in the first place.
+    const cap = Math.max(durationMs - reserveMs, start + span / 2);
+    const end = Math.min(windowEnd, cap);
+    times.push(start + random() * (end - start));
   }
   return times;
 }
@@ -37,7 +49,10 @@ export function createScheduler({
     handle = setTimer(() => {
       if (stopped) return;
       idx += 1;
-      Promise.resolve(onCapture()).finally(scheduleNext);
+      // One bad frame must never kill the cadence, and must never escape as an
+      // unhandled rejection: swallow whatever onCapture throws (sync or async)
+      // and move on to the next window.
+      Promise.resolve().then(onCapture).catch(() => {}).then(scheduleNext);
     }, delay);
   }
 

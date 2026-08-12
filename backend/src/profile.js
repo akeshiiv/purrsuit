@@ -18,6 +18,32 @@ export function isValidColour(colour) {
   return typeof colour === 'string' && COLOUR_PATTERN.test(colour);
 }
 
+// A time zone is an IANA zone name (`Asia/Singapore`, `UTC`), probed the same
+// way study/stats.js normalizeTz probes it — ICU is the only complete list of
+// zone names, and asking it to format is the cheapest way to ask "do you know
+// this one?". Unlike normalizeTz this answers rather than falling back: that
+// fallback is right for a tolerant read (a junk `?tz=` shouldn't 500 a stats
+// page) and wrong for an explicit write, where silently storing 'UTC' for a
+// typo'd zone would quietly move the user's streak by hours.
+//
+// Bare UTC offsets ('+05:30') satisfy the probe but are rejected anyway: they
+// are not zone names, they cannot follow a DST rule, and Postgres reads a signed
+// offset by its own convention — so the one thing the column exists for, feeding
+// `AT TIME ZONE`, is exactly where they would go wrong. No IANA name begins with
+// a sign, so the leading-character test costs nothing real. Browsers never
+// produce this form from resolvedOptions().timeZone either.
+export function isValidTimeZone(tz) {
+  if (typeof tz !== 'string' || tz.length === 0) return false;
+  if (tz.startsWith('+') || tz.startsWith('-')) return false;
+  try {
+    // Throws RangeError for an unknown time zone.
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // An avatar URL must be a syntactically valid absolute http(s) URL.
 export function isValidAvatarUrl(url) {
   if (typeof url !== 'string') return false;
@@ -34,7 +60,8 @@ export function isValidAvatarUrl(url) {
 // actually present are validated and returned (so callers update just those
 // columns). Returns { ok: true, updates } with normalised values, or
 // { ok: false, error, message } using the contract's error codes on the first
-// invalid field (checked in the contract's documented order: name, colour, avatar).
+// invalid field (checked in the contract's documented order: name, colour,
+// avatar, timeZone).
 export function validateProfilePatch(body) {
   const updates = {};
 
@@ -59,6 +86,19 @@ export function validateProfilePatch(body) {
     updates.avatarUrl = body.avatarUrl;
   }
 
+  if (body.timeZone !== undefined) {
+    if (!isValidTimeZone(body.timeZone)) {
+      return { ok: false, error: 'INVALID_TIMEZONE', message: 'timeZone must be an IANA time zone name' };
+    }
+    // Stored verbatim, not canonicalised to ICU's preferred spelling. The client
+    // is both the only writer and the only reader that compares — it re-syncs
+    // when the stored zone differs from the browser's — so rewriting 'US/Pacific'
+    // to 'America/Los_Angeles' would leave it re-PATCHing the same zone on every
+    // login. Postgres resolves zone names case-insensitively, so a spelling that
+    // ICU accepted is a spelling `AT TIME ZONE` accepts.
+    updates.timeZone = body.timeZone;
+  }
+
   return { ok: true, updates };
 }
 
@@ -72,6 +112,10 @@ export function toProfile(row, realm = null) {
     email: row.email,
     avatarUrl: row.avatar_url,
     colour: row.colour,
+    // null until the client first syncs the browser's zone. Read sites coalesce
+    // it to 'UTC'; it stays null here so "never told us" is still legible as
+    // itself rather than as a player who genuinely lives in UTC.
+    timeZone: row.time_zone ?? null,
     realm,
   };
 }

@@ -1,8 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import EntryScreen from '../components/layout/EntryScreen.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import { realmService } from '../services/index.js';
+
+const DECOR = [
+  { id: 'gold', style: { left: -60, bottom: -40, width: 260, height: 260, background: 'rgba(242, 206, 126, 0.22)' } },
+  { id: 'blue', style: { right: -50, top: -50, width: 240, height: 240, background: 'rgba(140, 199, 228, 0.2)' } },
+];
 
 export default function RealmCreate() {
   const navigate = useNavigate();
@@ -35,64 +41,101 @@ export default function RealmCreate() {
   }
 
   return (
-    <Card className="max-w-lg space-y-4">
-      <h1 className="text-2xl font-semibold">Create realm</h1>
-      <form className="space-y-3" onSubmit={handleSubmit}>
-        <label className="block text-sm">
-          Name
-          <input
-            className="mt-1 w-full rounded border px-3 py-2"
-            onChange={event => setForm({ ...form, name: event.target.value })}
-            value={form.name}
-          />
-        </label>
-        <label className="block text-sm">
-          Map
-          <select
-            className="mt-1 w-full rounded border px-3 py-2"
-            onChange={event => setForm({ ...form, mapPreset: event.target.value })}
-            value={form.mapPreset}
-          >
-            <option value="open_plains">Open Plains</option>
-            <option value="crossroads">Crossroads</option>
-            <option value="archipelago">Archipelago</option>
-          </select>
-        </label>
-        <label className="block text-sm">
-          Max players
-          <input
-            className="mt-1 w-full rounded border px-3 py-2"
-            max="10"
-            min="2"
-            onChange={event => setForm({ ...form, maxPlayers: event.target.value })}
-            type="number"
-            value={form.maxPlayers}
-          />
-        </label>
-        <label className="block text-sm">
-          Season days
-          <input
-            className="mt-1 w-full rounded border px-3 py-2"
-            max="366"
-            min="7"
-            onChange={event => setForm({ ...form, seasonLengthDays: event.target.value })}
-            type="number"
-            value={form.seasonLengthDays}
-          />
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            checked={form.antiCheat}
-            onChange={event => setForm({ ...form, antiCheat: event.target.checked })}
-            type="checkbox"
-          />
-          Anti-cheat
-        </label>
-        <Button disabled={submitting} type="submit">
-          {submitting ? 'Creating...' : 'Create'}
-        </Button>
-      </form>
-      {error && <p className="text-sm text-red-700">{error}</p>}
-    </Card>
+    <EntryScreen className="flex-col" decor={DECOR}>
+      <header className="flex items-center px-10 pt-[22px]">
+        <h1 className="font-display text-[28px] font-extrabold text-ink">Purrsuit</h1>
+        <button
+          className="ml-auto cursor-pointer text-[12.5px] font-extrabold text-ink-muted-soft hover:text-[#8a5a22]"
+          onClick={() => navigate('/realms')}
+          type="button"
+        >
+          Back to realms
+        </button>
+      </header>
+
+      <div className="flex flex-1 items-center justify-center px-10 py-10">
+        <Card className="w-[520px] max-w-full px-[34px] pt-[32px] pb-[34px]" variant="hero">
+          <p className="p-label">New realm</p>
+          <h2 className="mt-2 font-display text-[34px] leading-[1.05] font-extrabold text-ink">Create a realm</h2>
+          <p className="mt-2 text-[13.5px] font-bold text-ink-muted [text-wrap:pretty]">
+            You are the admin. Everyone else joins with the realm&rsquo;s code.
+          </p>
+
+          <form className="mt-6 flex flex-col gap-[18px]" onSubmit={handleSubmit}>
+            <label className="block">
+              <span className="p-label">Realm name</span>
+              <input
+                className="p-input mt-2"
+                onChange={event => setForm({ ...form, name: event.target.value })}
+                value={form.name}
+              />
+            </label>
+
+            <label className="block">
+              <span className="p-label">Map</span>
+              <select
+                className="p-input mt-2 cursor-pointer"
+                onChange={event => setForm({ ...form, mapPreset: event.target.value })}
+                value={form.mapPreset}
+              >
+                <option value="open_plains">Open Plains</option>
+                <option value="crossroads">Crossroads</option>
+                <option value="archipelago">Archipelago</option>
+              </select>
+            </label>
+
+            <div className="grid grid-cols-2 gap-4">
+              <label className="block">
+                <span className="p-label">Max players</span>
+                <input
+                  className="p-input mt-2 font-display"
+                  max="10"
+                  min="2"
+                  onChange={event => setForm({ ...form, maxPlayers: event.target.value })}
+                  type="number"
+                  value={form.maxPlayers}
+                />
+                <span className="mt-[6px] block text-[11.5px] font-bold text-ink-muted-soft">2 to 10</span>
+              </label>
+              <label className="block">
+                <span className="p-label">Season days</span>
+                <input
+                  className="p-input mt-2 font-display"
+                  max="366"
+                  min="7"
+                  onChange={event => setForm({ ...form, seasonLengthDays: event.target.value })}
+                  type="number"
+                  value={form.seasonLengthDays}
+                />
+                <span className="mt-[6px] block text-[11.5px] font-bold text-ink-muted-soft">7 to 366</span>
+              </label>
+            </div>
+
+            <label className="p-tile-sunk flex cursor-pointer items-start gap-3 px-4 py-[14px]">
+              <input
+                checked={form.antiCheat}
+                className="mt-[2px] h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#B98C4A]"
+                onChange={event => setForm({ ...form, antiCheat: event.target.checked })}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-display text-[17px] font-extrabold text-ink">Anti-cheat</span>
+                <span className="mt-[2px] block text-[12.5px] font-bold text-ink-muted [text-wrap:pretty]">
+                  Focus sessions are monitored, and a distracted session ends without coins.
+                </span>
+              </span>
+            </label>
+
+            <Button disabled={submitting} full size="lg" type="submit" variant="gold">
+              {submitting ? 'Creating...' : 'Create realm'}
+            </Button>
+          </form>
+
+          {error && (
+            <p className="p-danger mt-4 px-4 py-3 text-[12.5px] font-bold" role="alert">{error}</p>
+          )}
+        </Card>
+      </div>
+    </EntryScreen>
   );
 }

@@ -53,9 +53,14 @@ function realmSummary(row, role) {
     maxPlayers: toInt(row.max_players ?? row.maxPlayers),
     mapSize: toInt(row.map_size ?? row.mapSize),
     antiCheatEnabled: Boolean(row.anticheat_enabled ?? row.antiCheatEnabled),
+    // With Season.startedAt this is what lets a client say "day 4 of 7" rather
+    // than only counting down to ends_at.
+    seasonLengthDays: toInt(row.season_length_days ?? row.seasonLengthDays),
   };
 }
 
+// Kept in step with the copy in ../season/service.js — both project a season row
+// into the same contract Season shape.
 function seasonPayload(row) {
   return {
     id: toInt(row.season_id ?? row.id),
@@ -63,6 +68,10 @@ function seasonPayload(row) {
     endsAt: iso(row.ends_at ?? row.endsAt),
     stateVersion: toInt(row.state_version ?? row.stateVersion),
     winnerName: row.winner_name ?? row.winnerName ?? null,
+    // `season_number` is the per-realm counter the UI means by "season 12";
+    // `id` is a global row id and is not it once a second realm exists.
+    seasonNumber: toInt(row.season_number ?? row.seasonNumber),
+    startedAt: iso(row.started_at ?? row.startedAt),
   };
 }
 
@@ -167,7 +176,7 @@ async function bumpSeasonVersion(tx, seasonId) {
     UPDATE seasons
     SET state_version = state_version + 1
     WHERE id = ${seasonId}
-    RETURNING id, status, ends_at, state_version
+    RETURNING id, season_number, status, started_at, ends_at, state_version
   `;
   return rows[0];
 }
@@ -273,9 +282,12 @@ async function dashboardPayload(userId, realmId) {
            r.map_preset,
            r.max_players::int AS max_players,
            r.map_size::int AS map_size,
+           r.season_length_days::int AS season_length_days,
            r.anticheat_enabled,
            s.id AS season_id,
+           s.season_number,
            s.status AS season_status,
+           s.started_at,
            s.ends_at,
            s.state_version,
            winner_user.name AS winner_name,
@@ -332,7 +344,7 @@ async function rollCurrentSeason(tx, current, now) {
         winner_member_id = ${winnerMemberId},
         state_version = state_version + 1
     WHERE id = ${current.season_id} AND status = 'active'
-    RETURNING id, status, ends_at, state_version
+    RETURNING id, season_number, status, started_at, ends_at, state_version
   `;
 
   if (endedRows.length === 0) {
@@ -349,7 +361,7 @@ async function rollCurrentSeason(tx, current, now) {
   const newSeasonRows = await tx`
     INSERT INTO seasons (realm_id, season_number, started_at, ends_at, state_version)
     VALUES (${current.realm_id}, ${nextSeasonNumber}, ${now}, ${nextEndsAt}, ${nextStateVersion})
-    RETURNING id, status, ends_at, state_version
+    RETURNING id, season_number, status, started_at, ends_at, state_version
   `;
   const newSeason = newSeasonRows[0];
   const members = await memberRowsForRealm(tx, current.realm_id);
@@ -444,6 +456,7 @@ export async function memberRealmSummary(userId) {
            r.map_preset,
            r.max_players::int AS max_players,
            r.map_size::int AS map_size,
+           r.season_length_days::int AS season_length_days,
            r.anticheat_enabled,
            rm.role
     FROM realm_members rm
@@ -504,7 +517,7 @@ export async function createRealm(userId, input) {
         const seasonRows = await tx`
           INSERT INTO seasons (realm_id, season_number, started_at, ends_at, state_version)
           VALUES (${realm.id}, 1, ${now}, ${endsAt}, 1)
-          RETURNING id, status, ends_at, state_version
+          RETURNING id, season_number, status, started_at, ends_at, state_version
         `;
         const season = seasonRows[0];
         const cells = generateSeasonCells({
@@ -571,6 +584,7 @@ export async function joinRealm(userId, input = {}) {
              s.id AS season_id,
              s.season_number,
              s.status AS season_status,
+             s.started_at,
              s.ends_at,
              s.state_version
       FROM realms r
@@ -578,11 +592,33 @@ export async function joinRealm(userId, input = {}) {
       WHERE r.join_code = ${joinCode}
       FOR UPDATE OF r, s
     `;
-    const row = rows[0];
+    let row = rows[0];
     if (!row) {
       throw realmError(404, 'REALM_NOT_FOUND', 'No realm exists for that join code.');
     }
-    if (row.season_status !== 'active') {
+
+    // Nothing runs on a timer here: a season stays status='active' past its
+    // ends_at until a request rolls it over. Letting someone join that window
+    // drops them onto a board that resets out from under them the moment any
+    // member next polls. Close it out first — same boundary ensureSeasonFresh
+    // uses — so the new player lands on the season that replaces it rather than
+    // being turned away. The lock this transaction already holds covers the roll.
+    const now = new Date();
+    if (row.season_status === 'active' && now >= new Date(row.ends_at)) {
+      const current = await currentRealmSeasonRow(tx, row.id, { lock: true });
+      if (current) {
+        await rollCurrentSeason(tx, current, now);
+        const refreshed = await currentRealmSeasonRow(tx, row.id, { lock: true });
+        // currentRealmSeasonRow names the realm key realm_id; everything below
+        // reads it as `id`, so restore that alias rather than teach each caller.
+        if (refreshed) row = { ...refreshed, id: refreshed.realm_id };
+      }
+    }
+
+    // Authoritative under the lock. Covers both a realm parked between seasons
+    // and the case where the rollover above declined to run (another transaction
+    // beat us to the season, so rollCurrentSeason found nothing left to end).
+    if (row.season_status !== 'active' || new Date(row.ends_at) <= now) {
       throw realmError(409, 'SEASON_ENDED', 'This realm is between active seasons.');
     }
 
@@ -749,9 +785,18 @@ export async function updateRealmSettings(userId, realmId, input = {}) {
       throw realmError(403, 'NOT_ADMIN', 'Only the realm admin can do that.');
     }
 
+    // Anti-cheat is a security control, so the flag has to be stated, not
+    // guessed at. Coercing with Boolean() read the string "false" as ON and — far
+    // worse — read a request that simply omitted the field as a deliberate OFF,
+    // letting a malformed or truncated PATCH silently disarm the realm. Same
+    // strictness normalizeRealmSettings applies to antiCheat at creation time.
+    if (typeof input.antiCheat !== 'boolean') {
+      throw realmError(400, 'INVALID_REALM_SETTINGS', 'antiCheat must be true or false.');
+    }
+
     const rows = await tx`
       UPDATE realms
-      SET anticheat_enabled = ${Boolean(input.antiCheat)}
+      SET anticheat_enabled = ${input.antiCheat}
       WHERE id = ${realmId}
       RETURNING *
     `;

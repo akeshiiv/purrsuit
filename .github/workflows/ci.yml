@@ -1,0 +1,59 @@
+# Pull-request checks. `.github/workflows/deploy.yml` only runs on pushes to
+# main, so this is the gate that keeps failing code from reaching production.
+#
+# No secrets are required: every check runs offline against the checkout.
+#
+# Installs are locked (`npm ci`, never `npm install`) so CI resolves exactly the
+# versions in each lockfile. There is no lockfile at the repository root, so
+# `actions/setup-node` caching has to be pointed at each project's lockfile
+# explicitly — without `cache-dependency-path` the action fails with
+# "Dependencies lock file is not found".
+
+name: CI
+
+on:
+  pull_request:
+
+# Supersede an in-flight run when the branch is pushed again. Safe to cancel:
+# unlike the production migration, nothing here has side effects.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      # `node --test` with no arguments; picks up backend/**/*.test.js.
+      - run: npm test
+
+  frontend:
+    name: Frontend lint, tests and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      # `node --test "src/**/*.test.js"`; the glob is explicit because a bare
+      # `node --test` would also walk the build output in dist/.
+      - run: npm test
+      - run: npm run build

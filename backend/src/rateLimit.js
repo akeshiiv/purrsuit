@@ -1,23 +1,40 @@
-// Rate limiting. Uses the default in-memory store. NOTE: on Vercel serverless each
-// function instance keeps its own counters and they reset on cold start, so limits
-// are per-instance and approximate. The `store` slot below is the single place to
-// drop in a shared store (e.g. rate-limit-redis backed by Upstash) for accurate
-// global limits without touching any route code.
+// Rate limiting. Counters live in Postgres rather than in express-rate-limit's
+// default MemoryStore: on Vercel every serverless instance runs its own copy of
+// this module, so an in-memory tally is per-instance and is wiped by each cold
+// start — the numbers below would then cap nothing in particular. The database
+// is the only state all instances already share, so it is where the counters go.
+// Set RATE_LIMIT_STORE=memory to fall back to the in-process store (handy for a
+// single-process local run, and an escape hatch if the table ever misbehaves);
+// anything else, including leaving it unset, uses the shared store.
 import { rateLimit } from 'express-rate-limit';
+import { PostgresRateLimitStore } from './rateLimitStore.js';
 
-const store = undefined; // default MemoryStore; swap for a shared store here.
+// Read from process.env rather than src/config/env.js on purpose: this module is
+// only ever imported from index.js, which loads that config (and therefore
+// dotenv) first, so the value is identical — and staying off the config edge
+// keeps the limiters importable in isolation. A typo in the variable is caught at
+// startup by validate-env.js, which rejects anything outside postgres | memory.
+const useSharedStore = (process.env.RATE_LIMIT_STORE ?? 'postgres') !== 'memory';
+
+// Every limiter gets its own store instance under its own scope. Sharing one
+// would let ordinary browsing burn down the auth budget, and express-rate-limit
+// rejects a store handed to two limiters outright. Returning undefined leaves
+// express-rate-limit to construct its own MemoryStore, as before.
+function storeFor(scope) {
+  return useSharedStore ? new PostgresRateLimitStore({ scope }) : undefined;
+}
 
 const baseOptions = {
   windowMs: 15 * 60 * 1000, // 15 minutes
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  store,
 };
 
 // Looser baseline applied to every request.
 export const globalLimiter = rateLimit({
   ...baseOptions,
   limit: 300,
+  store: storeFor('global'),
   message: { error: 'Too many requests, please try again later.' },
 });
 
@@ -27,5 +44,6 @@ export const globalLimiter = rateLimit({
 export const authLimiter = rateLimit({
   ...baseOptions,
   limit: 50,
+  store: storeFor('auth'),
   message: { error: 'Too many authentication attempts, please try again later.' },
 });

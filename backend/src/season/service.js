@@ -1,6 +1,6 @@
 import { sql } from '../../db.js';
 import { RealmError, ensureSeasonFresh } from '../realms/service.js';
-import { decideSeasonStatus, toLeaderboardRow } from './rules.js';
+import { decideSeasonStatus, streaksByUser, toLeaderboardRow } from './rules.js';
 
 function toInt(value) {
   return Number(value);
@@ -11,7 +11,8 @@ function iso(value) {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-// Project a season row into the contract Season shape.
+// Project a season row into the contract Season shape. Duplicated in
+// ../realms/service.js; the two must stay in step.
 function seasonPayload(row) {
   return {
     id: toInt(row.season_id ?? row.id),
@@ -19,6 +20,10 @@ function seasonPayload(row) {
     endsAt: iso(row.ends_at ?? row.endsAt),
     stateVersion: toInt(row.state_version ?? row.stateVersion),
     winnerName: row.winner_name ?? row.winnerName ?? null,
+    // `season_number` is the per-realm counter the UI means by "season 12";
+    // `id` is a global row id and is not it once a second realm exists.
+    seasonNumber: toInt(row.season_number ?? row.seasonNumber),
+    startedAt: iso(row.started_at ?? row.startedAt),
   };
 }
 
@@ -43,7 +48,9 @@ async function resolveLiveRealm(userId) {
 async function currentSeasonRow(realmId) {
   const rows = await sql`
     SELECT s.id AS season_id,
+           s.season_number,
            s.status AS season_status,
+           s.started_at,
            s.ends_at,
            s.state_version,
            winner_user.name AS winner_name
@@ -73,7 +80,7 @@ export async function leaderboard(userId, { since } = {}) {
     return { version, changed: false };
   }
 
-  const rows = await sql`
+  const standings = sql`
     SELECT rm.user_id,
            u.name,
            u.colour,
@@ -91,10 +98,51 @@ export async function leaderboard(userId, { since } = {}) {
     ORDER BY territories DESC, rm.battles_won DESC, rm.seconds_studied DESC, rm.joined_at ASC, rm.id ASC
   `;
 
+  // Every member's distinct study days in ONE grouped pass, not a query per row:
+  // this runs on every leaderboard poll, for every member of the realm.
+  //
+  // Days are bucketed in each member's OWN zone, not the viewer's and not UTC. A
+  // streak is a run of that player's calendar days, so it is their midnight that
+  // ends a day — which is also what makes the row agree with the streak the same
+  // player is shown on their Stats page. `users.time_zone` stays NULL until a
+  // client has synced one, and every read site coalesces that to 'UTC'.
+  //
+  // Each member's local "today" is selected alongside their days, because
+  // computeStreak still counts a run that ended yesterday and yesterday in Tokyo
+  // is not the same span of hours as yesterday in Chicago. One shared date would
+  // quietly hand or withhold a day from everyone in the wrong half of the world.
+  //
+  // `sessions.created_at` is a bare TIMESTAMP holding UTC wall time, so it has to
+  // be labelled UTC before it can be converted — the same
+  // `AT TIME ZONE 'UTC' AT TIME ZONE <zone>` pattern getStudyStats uses.
+  //
+  // Scope is all-time, matching the streak a player sees on their own stats: a
+  // streak is a study habit, not a season score, and zeroing everyone's at each
+  // rollover would take it away from exactly the players who kept showing up.
+  const studyDays = sql`
+    SELECT rm.user_id,
+           to_char(
+             (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE COALESCE(u.time_zone, 'UTC'))::date,
+             'YYYY-MM-DD'
+           ) AS day,
+           to_char(
+             (now() AT TIME ZONE COALESCE(u.time_zone, 'UTC'))::date,
+             'YYYY-MM-DD'
+           ) AS today
+    FROM realm_members rm
+    JOIN users u ON u.id = rm.user_id
+    JOIN sessions s ON s.user_id = rm.user_id
+    WHERE rm.realm_id = ${realmId}
+    GROUP BY rm.user_id, day, today
+  `;
+
+  const [rows, dayRows] = await Promise.all([standings, studyDays]);
+  const streaks = streaksByUser(dayRows);
+
   return {
     version,
     changed: true,
-    rows: rows.map(toLeaderboardRow),
+    rows: rows.map((row) => toLeaderboardRow(row, streaks.get(toInt(row.user_id)))),
     season: seasonPayload(season),
   };
 }
@@ -135,7 +183,11 @@ async function finalStandings(seasonId) {
     WHERE sr.season_id = ${seasonId}
     ORDER BY sr.rank ASC
   `;
-  return rows.map(toLeaderboardRow);
+  // No streak argument: `season_results` snapshots standings, not study days, so
+  // there is nothing here to recount a run of calendar days from — and a streak
+  // measured against *today* would keep drifting under a table that is supposed
+  // to be frozen at season end. Rows still carry the keys, at 0.
+  return rows.map((row) => toLeaderboardRow(row));
 }
 
 // GET /api/realm/season-status — whether the season has ended and whether this

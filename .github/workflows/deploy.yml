@@ -1,18 +1,90 @@
+# Production deploy for BOTH Vercel projects in this monorepo (the Express API
+# under `backend/` and the Vite SPA under `frontend/`), gated on the production
+# database schema being up to date first.
+#
+# ---------------------------------------------------------------------------
+# REQUIRED GITHUB SECRETS
+#
+# Every job below runs in the `Production` environment, so these must be added
+# as *environment* secrets on that environment (repository-level secrets also
+# resolve, but environment scoping is the point of keeping DATABASE_URL here):
+#
+#   VERCEL_TOKEN                Vercel access token the CLI authenticates with.
+#   VERCEL_ORG_ID               ID of the Vercel team that owns both projects.
+#   VERCEL_PROJECT_ID_BACKEND   Project ID of the backend (Express API) project.
+#   VERCEL_PROJECT_ID_FRONTEND  Project ID of the frontend (Vite SPA) project.
+#   DATABASE_URL                Neon connection string for the production
+#                               database. Read only by the `migrate` job.
+#   PRODUCTION_FRONTEND_URL     Public origin of the deployed SPA, e.g.
+#                               https://purrsuit.vercel.app (no trailing path).
+#                               Asserted by the frontend health check. The
+#                               backend has a known alias so it needs no secret.
+#
+# The old single `VERCEL_PROJECT_ID` secret is no longer read by this workflow
+# and can be deleted once both replacements above exist.
+#
+# ---------------------------------------------------------------------------
+# ASSUMPTIONS
+#
+# * Every `vercel` command runs from the repository root. There is no
+#   `package.json` at the root; `vercel pull` fetches each project's Root
+#   Directory setting from the Vercel dashboard (`backend` and `frontend`
+#   respectively) and `vercel build` applies it relative to the checkout.
+#   Changing either project's Root Directory in the dashboard breaks this.
+# * If the `Production` environment has required reviewers, all three jobs will
+#   each wait for approval.
+
 name: Deploy to Vercel
+
 on:
   push:
     branches: [main]
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
   VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
-  deploy:
+  # Schema first. Backend code that depends on a new table must never reach
+  # production ahead of the migration that creates it.
+  migrate:
+    name: Migrate production database
     runs-on: ubuntu-latest
     environment:
-      name: Production 
+      name: Production
+    # Serialize migration runs across overlapping pushes to main. Deliberately
+    # NOT cancel-in-progress: interrupting a partially applied run is worse than
+    # making the next one queue behind it.
+    concurrency:
+      group: purrsuit-production-migrations
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      # `node migrations/run.js` applies each pending file in its own
+      # transaction and calls process.exit(1) on the first failure, so a failed
+      # migration fails this job and the deploy jobs below never start.
+      - name: Apply pending migrations
+        run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  deploy-backend:
+    name: Deploy backend
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment:
+      name: Production
+    env:
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_BACKEND }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,3 +94,62 @@ jobs:
       - run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
       - run: vercel build --prod --token=$VERCEL_TOKEN
       - run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+      # Assert the production alias, not the per-deployment URL: the alias is
+      # the origin the SPA's rewrites actually target, and it is not subject to
+      # Vercel Deployment Protection. `GET /` returns a plain 200 string.
+      - name: Health check
+        run: |
+          url='https://purrsuit-backend.vercel.app/'
+          status=000
+          for attempt in 1 2 3 4 5; do
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$url") || status=000
+            echo "attempt $attempt: GET $url -> $status"
+            if [ "$status" = "200" ]; then
+              echo "backend healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::backend health check failed for $url (last status $status)"
+          exit 1
+
+  # Deploys after the backend so the UI never lands ahead of the API and schema
+  # it was built against. This couples the two deploys by choice: a backend
+  # failure blocks the frontend.
+  deploy-frontend:
+    name: Deploy frontend
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    environment:
+      name: Production
+    env:
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_FRONTEND }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm i -g vercel@latest
+      - run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+      - run: vercel build --prod --token=$VERCEL_TOKEN
+      - run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+      - name: Health check
+        env:
+          FRONTEND_URL: ${{ secrets.PRODUCTION_FRONTEND_URL }}
+        run: |
+          if [ -z "$FRONTEND_URL" ]; then
+            echo "::error::PRODUCTION_FRONTEND_URL is not set on the Production environment"
+            exit 1
+          fi
+          status=000
+          for attempt in 1 2 3 4 5; do
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$FRONTEND_URL") || status=000
+            echo "attempt $attempt: GET $FRONTEND_URL -> $status"
+            if [ "$status" = "200" ]; then
+              echo "frontend healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::frontend health check failed for $FRONTEND_URL (last status $status)"
+          exit 1

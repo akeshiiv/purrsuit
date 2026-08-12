@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function Modal({ children, open, onClose, title }) {
+export default function Modal({ children, open, onClose, title, className = '' }) {
   useEffect(() => {
     if (!open) return undefined;
 
@@ -17,7 +17,7 @@ export default function Modal({ children, open, onClose, title }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(36,24,9,.55)] p-4"
       onMouseDown={event => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -25,7 +25,7 @@ export default function Modal({ children, open, onClose, title }) {
       <div
         aria-label={title}
         aria-modal="true"
-        className="w-full max-w-md rounded bg-white p-4 shadow-lg"
+        className={`season-pop w-full max-w-md p-card-hero p-7 ${className}`}
         role="dialog"
       >
         {children}
