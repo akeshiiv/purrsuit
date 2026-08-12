@@ -1,18 +1,41 @@
 import { createPortal } from 'react-dom';
 import Button from './ui/Button.jsx';
+import { catArt } from './cats.js';
 import { formatStudy } from '../utils/time.js';
 
-const MEDALS = ['🥇', '🥈', '🥉'];
-const CONFETTI_BASE = ['#fbbf24', '#f59e0b', '#fde68a', '#fb7185', '#34d399', '#60a5fa'];
+// 18 strips in the design's six confetti colours. Fixed at module scope: the
+// pattern is decoration, so it must not re-shuffle on every render.
+const CONFETTI_COLOURS = ['#F2CE7E', '#E9A62C', '#8CC7E4', '#E88A7D', '#7ED09B', '#C99C55'];
+const CONFETTI = Array.from({ length: 18 }, (_, index) => ({
+  left: `${(index * 9.7 + (index % 4) * 4) % 100}%`,
+  colour: CONFETTI_COLOURS[index % CONFETTI_COLOURS.length],
+  animation: `fall ${(2.4 + (index % 5) * 0.5).toFixed(2)}s linear ${((index % 7) * 0.32).toFixed(2)}s infinite`,
+}));
 
-function buildConfetti(rows) {
-  const colours = [...CONFETTI_BASE, ...rows.map(row => row.colour).filter(Boolean)];
-  return Array.from({ length: 20 }, (_, index) => ({
-    left: (index * 9.7 + (index % 4) * 4) % 100,
-    delay: (index % 7) * 0.28,
-    duration: 2.2 + (index % 5) * 0.45,
-    colour: colours[index % colours.length],
-  }));
+// The two faces of the card. Only the crest, the eyebrow, the headline and the
+// banner gradient differ — the card, the standings and the CTA are shared.
+const VICTORY = {
+  crest: 'A',
+  eyebrow: 'Champion',
+  headline: 'Victory!',
+  banner: 'linear-gradient(#F5D68C,#E9A62C 60%,#D98B1E)',
+};
+const DEFEAT = {
+  crest: 'C',
+  eyebrow: 'Final standings',
+  headline: 'Season over',
+  banner: 'linear-gradient(#F5EDDD,#E0C89E 60%,#C99C55)',
+};
+
+const CATS = ['A', 'B', 'C'];
+
+// Standings rows carry no avatar art, so a player's cat is derived from their id
+// — stable for a given player rather than random per render.
+function catFor(userId) {
+  const text = String(userId ?? '');
+  let sum = 0;
+  for (let index = 0; index < text.length; index += 1) sum += text.charCodeAt(index);
+  return CATS[sum % CATS.length];
 }
 
 export default function SeasonEndOverlay({ winnerName, rows = [], me, onAck, acking = false, ackError = '' }) {
@@ -20,22 +43,17 @@ export default function SeasonEndOverlay({ winnerName, rows = [], me, onAck, ack
   const placementIndex = rows.findIndex(row => row.userId === me?.userId);
   const placement = placementIndex >= 0 ? placementIndex + 1 : null;
   const total = rows.length;
-  const confetti = victory ? buildConfetti(rows) : [];
+  const face = victory ? VICTORY : DEFEAT;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/85 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-[rgba(36,24,9,.93)] p-4 font-body">
       {victory && (
-        <div aria-hidden="true" className="season-confetti pointer-events-none absolute inset-0">
-          {confetti.map((piece, index) => (
+        <div aria-hidden="true" className="season-confetti pointer-events-none absolute inset-0 overflow-hidden">
+          {CONFETTI.map((piece, index) => (
             <span
               key={index}
-              className="season-confetti-piece"
-              style={{
-                left: `${piece.left}%`,
-                backgroundColor: piece.colour,
-                animationDelay: `${piece.delay}s`,
-                animationDuration: `${piece.duration}s`,
-              }}
+              className="absolute top-[-16px] block h-4 w-[9px] rounded-[2px]"
+              style={{ left: piece.left, backgroundColor: piece.colour, animation: piece.animation }}
             />
           ))}
         </div>
@@ -45,103 +63,81 @@ export default function SeasonEndOverlay({ winnerName, rows = [], me, onAck, ack
         aria-label="Season results"
         aria-modal="true"
         role="dialog"
-        className="season-pop relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5"
+        className="season-pop relative w-[520px] max-w-full overflow-hidden rounded-[36px] border-[5px] border-edge-strong bg-surface shadow-[0_20px_0_#A9793A,0_40px_80px_-20px_rgba(0,0,0,.6)]"
       >
-        <div
-          className={`relative overflow-hidden px-6 pb-7 pt-9 text-center text-white ${
-            victory
-              ? 'bg-gradient-to-b from-amber-400 via-amber-500 to-orange-600'
-              : 'bg-gradient-to-b from-slate-700 to-slate-900'
-          }`}
-        >
-          {victory && (
-            <div
-              aria-hidden="true"
-              className="season-spin pointer-events-none absolute left-1/2 top-[-30%] h-[180%] w-[180%] -translate-x-1/2 opacity-40"
-              style={{
-                background:
-                  'repeating-conic-gradient(from 0deg, rgba(255,255,255,0.55) 0deg 8deg, transparent 8deg 22deg)',
-                maskImage: 'radial-gradient(circle at center, black 0%, black 35%, transparent 70%)',
-                WebkitMaskImage: 'radial-gradient(circle at center, black 0%, black 35%, transparent 70%)',
-              }}
-            />
-          )}
-
-          <div className="relative">
-            <div className={`text-7xl drop-shadow ${victory ? 'season-float' : ''}`} aria-hidden="true">
-              {victory ? '🏆' : '🐾'}
-            </div>
-            <p
-              className="season-rise mt-4 text-xs font-semibold uppercase tracking-[0.35em] text-white/80"
-              style={{ animationDelay: '80ms' }}
-            >
-              {victory ? 'Champion' : 'Final Standings'}
-            </p>
-            <h2
-              className="season-rise mt-1 text-4xl font-black uppercase tracking-tight"
-              style={{ animationDelay: '160ms' }}
-            >
-              {victory ? 'Victory' : 'Season Over'}
-            </h2>
-            <p
-              className="season-rise mx-auto mt-2 max-w-xs text-sm text-white/90"
-              style={{ animationDelay: '240ms' }}
-            >
-              {victory
-                ? 'Congrats, you were the most locked in!'
-                : `${winnerName ?? 'Nobody'} won this season, GGWP!`}
-            </p>
-            {placement && (
-              <p
-                className="season-rise mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3.5 py-1 text-sm ring-1 ring-white/25 backdrop-blur"
-                style={{ animationDelay: '320ms' }}
-              >
-                <span className="opacity-80">You placed</span>
-                <span className="font-bold">#{placement}</span>
-                <span className="opacity-80">of {total}</span>
-              </p>
-            )}
+        <div className="px-[30px] pt-[34px] pb-[30px] text-center" style={{ background: face.banner }}>
+          <div className="p-cat-well mx-auto size-[130px] border-4 border-gold-edge bg-raised">
+            <img alt="" className="p-cat-art p-bob" src={catArt(face.crest)} />
           </div>
+          <p
+            className="season-rise mt-4 text-[12px] font-extrabold tracking-[.32em] text-gold-ink uppercase"
+            style={{ animationDelay: '80ms' }}
+          >
+            {face.eyebrow}
+          </p>
+          <p
+            className="season-rise mt-1 font-display text-[52px] leading-none font-extrabold text-ink"
+            style={{ animationDelay: '160ms' }}
+          >
+            {face.headline}
+          </p>
+          <p
+            className="season-rise mt-[10px] text-[14.5px] font-bold text-gold-ink"
+            style={{ animationDelay: '240ms' }}
+          >
+            {victory
+              ? 'Congrats — you were the most locked in this season.'
+              : `${winnerName ?? 'Nobody'} won this season, GGWP!`}
+          </p>
+          {placement && (
+            <p
+              className="season-rise mt-4 inline-block rounded-full border-2 border-[#C08D45] bg-[rgba(255,248,234,.65)] px-[18px] py-[7px] text-[13px] font-extrabold text-ink-body"
+              style={{ animationDelay: '320ms' }}
+            >
+              You placed #{placement} of {total}
+            </p>
+          )}
         </div>
 
-        <div className="space-y-4 p-6">
-          {rows.length > 0 && (
-            <ol className="space-y-1">
-              {rows.map((row, index) => {
-                const isMe = row.userId === me?.userId;
-                return (
-                  <li
-                    key={row.userId}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition ${
-                      isMe ? 'bg-amber-50 ring-1 ring-amber-200' : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className="w-6 text-center text-base">
-                      {MEDALS[index] ?? <span className="text-slate-400">{index + 1}</span>}
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="h-3.5 w-3.5 shrink-0 rounded-full shadow ring-2 ring-white"
-                      style={{ backgroundColor: row.colour }}
-                    />
-                    <span className="flex-1 truncate font-medium text-slate-800">
-                      {row.name}
-                      {isMe && <span className="ml-1.5 text-xs font-semibold text-amber-600">you</span>}
-                    </span>
-                    <span className="font-semibold tabular-nums text-slate-700">{row.territories}</span>
-                    <span className="w-14 text-right text-xs tabular-nums text-slate-400">
-                      {formatStudy(row.secondsStudied)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
+        <div className="flex flex-col gap-2 px-5 pt-[18px] pb-[22px]">
+          {rows.map((row, index) => (
+            <div
+              key={row.userId}
+              className={`flex items-center gap-[11px] rounded-2xl border-2 px-3 py-[9px] ${
+                index === 0 ? 'border-[#DDB264] bg-[#F7DFA8]' : 'border-[#EFE3CD] bg-muted'
+              }`}
+            >
+              <span className="w-4 font-display text-[16px] font-extrabold text-[#8A6234]">{index + 1}</span>
+              <span
+                className="p-cat-well size-8 flex-none border-2 bg-[#EFE0C2]"
+                style={{ borderColor: row.colour }}
+              >
+                <img alt="" className="p-cat-art p-[2px]" src={catArt(catFor(row.userId))} />
+              </span>
+              <span className="flex-1 truncate font-display text-[16px] font-extrabold text-ink">{row.name}</span>
+              <span className="p-nums text-[16px] text-ink-body-soft">{row.territories}</span>
+              <span className="w-[58px] text-right text-[11.5px] font-extrabold text-ink-muted-soft">
+                {formatStudy(row.secondsStudied)}
+              </span>
+            </div>
+          ))}
 
-          <Button autoFocus className="w-full justify-center font-semibold" onClick={onAck} disabled={acking}>
+          <Button
+            autoFocus
+            className="mt-2"
+            disabled={acking}
+            full
+            onClick={onAck}
+            size="lg"
+            variant="gold"
+          >
             {acking ? 'Returning…' : 'Back to realms'}
           </Button>
-          {ackError && <p className="text-center text-sm text-red-700">{ackError}</p>}
+          {ackError && (
+            <p className="text-center text-[13px] font-bold text-danger-ink" role="alert">
+              {ackError}
+            </p>
+          )}
         </div>
       </div>
     </div>,
