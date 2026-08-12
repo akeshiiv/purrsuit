@@ -87,7 +87,9 @@ export default function SeasonEndOverlay({ winnerName, rows = [], me, onAck, ack
           >
             {victory
               ? 'Congrats — you were the most locked in this season.'
-              : `${winnerName ?? 'Nobody'} won this season, GGWP!`}
+              : winnerName
+                ? `${winnerName} took this one. Your cats fought well.`
+                : 'Nobody claimed this season. Your cats fought well.'}
           </p>
           {placement && (
             <p

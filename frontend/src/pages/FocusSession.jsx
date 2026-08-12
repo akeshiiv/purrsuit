@@ -277,8 +277,8 @@ export default function FocusSession() {
           This realm checks your screen on-device for distractions. Nothing leaves your computer.
         </p>
         <p className="mt-2 max-w-[320px] text-[12.5px] font-bold text-[#7E9EB4] text-pretty">
-          Frames are checked locally on your machine — sharing is required to earn coins this
-          session.
+          Sharing is required to earn coins. If a distraction is detected the session ends early
+          and pays nothing — no coins, no study time.
         </p>
         <NightBlueButton
           className="mt-[22px]"
