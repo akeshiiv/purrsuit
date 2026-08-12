@@ -61,7 +61,7 @@ export function isValidAvatarUrl(url) {
 // columns). Returns { ok: true, updates } with normalised values, or
 // { ok: false, error, message } using the contract's error codes on the first
 // invalid field (checked in the contract's documented order: name, colour,
-// avatar, timeZone).
+// avatar, timeZone, hasOnboarded).
 export function validateProfilePatch(body) {
   const updates = {};
 
@@ -99,6 +99,21 @@ export function validateProfilePatch(body) {
     updates.timeZone = body.timeZone;
   }
 
+  // Checked last so the precedence the contract already documents (name →
+  // colour → avatar → timeZone) keeps meaning what it says: a client that
+  // finishes the tour and saves a bad name in the same request still hears
+  // about the name.
+  if (body.hasOnboarded !== undefined) {
+    if (typeof body.hasOnboarded !== 'boolean') {
+      return { ok: false, error: 'INVALID_ONBOARDED', message: 'hasOnboarded must be a boolean' };
+    }
+    // Taken strictly rather than for its truthiness. 'yes' and 1 are a client
+    // bug, and reading them as `true` would spend the tour's single showing on
+    // a request that never claimed the player had seen it — there is no second
+    // chance to get this one right, because the flag is what stops the tour.
+    updates.hasOnboarded = body.hasOnboarded;
+  }
+
   return { ok: true, updates };
 }
 
@@ -116,6 +131,14 @@ export function toProfile(row, realm = null) {
     // it to 'UTC'; it stays null here so "never told us" is still legible as
     // itself rather than as a player who genuinely lives in UTC.
     timeZone: row.time_zone ?? null,
+    // Coerced rather than passed through, because the honest answer for a row
+    // that predates the column — or a future read path that forgets to select
+    // it — is "has not been onboarded", and `undefined` cannot say that:
+    // JSON.stringify drops the key entirely, so the client would receive a
+    // Profile with no flag on it and replay the tour on every single login.
+    // The opposite of timeZone's treatment, and for the opposite reason: there
+    // the unset state is worth preserving, here it is worth collapsing.
+    hasOnboarded: Boolean(row.has_onboarded),
     realm,
   };
 }

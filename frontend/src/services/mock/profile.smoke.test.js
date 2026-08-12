@@ -21,7 +21,7 @@ test('update stores a valid IANA zone and returns the full Profile shape', async
   assert.equal(profile.timeZone, 'Europe/Berlin');
   assert.deepEqual(
     Object.keys(profile).sort(),
-    ['avatarUrl', 'colour', 'email', 'id', 'name', 'realm', 'timeZone'],
+    ['avatarUrl', 'colour', 'email', 'hasOnboarded', 'id', 'name', 'realm', 'timeZone'],
   );
 });
 

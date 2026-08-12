@@ -33,6 +33,10 @@ export default function RealmCreate() {
         maxPlayers: Number(form.maxPlayers),
         seasonLengthDays: Number(form.seasonLengthDays),
       });
+      // Into the app, not straight to /onboarding: RequireRealm already diverts
+      // a player who has not seen the tour, and two places deciding the same
+      // thing is how they drift apart. It also keeps the second realm right —
+      // someone who onboarded seasons ago lands on Home, not back in the tour.
       navigate('/realm');
     } catch (caught) {
       setError(caught.message);
