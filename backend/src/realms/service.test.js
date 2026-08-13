@@ -448,6 +448,24 @@ test('a non-admin is still refused before the flag is even inspected', async () 
   assert.equal(error.code, 'NOT_ADMIN');
 });
 
+// Regression: the INSERT used to omit acked_season_id, leaving it NULL.
+// decideSeasonStatus compares Number(null) -> 0 against a real season id, which
+// never matches, so needsAck came back true for any realm that had ever rolled
+// over — and SeasonEndGate put a full-screen victory/defeat overlay for a season
+// they never played in front of a player seconds after they joined.
+test('a joining member acknowledges the realm season that ended before they arrived', async () => {
+  const { queries } = await runJoin({ endsAt: FUTURE });
+
+  const insert = queries.find((q) => /INSERT INTO realm_members/i.test(q.sql));
+  assert.ok(insert, 'the joiner gets a membership row');
+  assert.match(insert.sql, /acked_season_id/, 'the membership seeds acked_season_id');
+  assert.match(
+    insert.sql,
+    /FROM seasons s WHERE s\.realm_id = \$\d+ AND s\.status = 'ended'/i,
+    'seeded from the realm\'s most recently ended season',
+  );
+});
+
 // Regression: the winner used to come from a separate query that broke territory
 // ties on join order, while season_results breaks them on battles won. On any tie
 // the end-of-season card crowned one player in its headline and a different one

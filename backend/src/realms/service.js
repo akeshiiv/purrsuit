@@ -653,9 +653,21 @@ export async function joinRealm(userId, input = {}) {
       throw realmError(409, 'REALM_FULL', 'This realm is full.');
     }
 
+    // Join already acknowledged: seed `acked_season_id` with the realm's most
+    // recently ended season. Left NULL, seasonStatus compares Number(null) → 0
+    // against a real season id, never matches, and reports needsAck=true — so a
+    // player who has just joined is met by a full-screen victory/defeat overlay
+    // for a season they never played, listing strangers. Someone arriving now
+    // has nothing to be shown the end of.
     const memberRows = await tx`
-      INSERT INTO realm_members (realm_id, user_id, role, home_x, home_y)
-      VALUES (${row.id}, ${userId}, 'member', ${home.x}, ${home.y})
+      INSERT INTO realm_members (realm_id, user_id, role, home_x, home_y, acked_season_id)
+      VALUES (
+        ${row.id}, ${userId}, 'member', ${home.x}, ${home.y},
+        (SELECT s.id FROM seasons s
+          WHERE s.realm_id = ${row.id} AND s.status = 'ended'
+          ORDER BY s.season_number DESC
+          LIMIT 1)
+      )
       RETURNING id
     `;
     await assignHomeCell(tx, {
