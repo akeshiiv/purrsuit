@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router';
 
+import AccountButton from './AccountButton.jsx';
 import TabIcon from './TabIcon.jsx';
 
 // Seven tabs, in design order. `end` keeps Home from matching its children.
@@ -35,7 +36,12 @@ function Tab({ tab }) {
 
 /**
  * Shared chrome for every in-app screen: wordmark, tab bar, and a right-hand
- * context cluster that each screen fills with its own content.
+ * context cluster that each screen fills with its own content, closed by the
+ * account button.
+ *
+ * The account button is rendered here rather than passed in as `right`, because
+ * every screen needs it and none of them should have to remember it — that is
+ * exactly how /account ended up with no way in.
  */
 export default function AppHeader({ children, tabs = true, className = '' }) {
   return (
@@ -48,7 +54,10 @@ export default function AppHeader({ children, tabs = true, className = '' }) {
           ))}
         </nav>
       ) : null}
-      <div className="ml-auto flex items-center gap-[10px]">{children}</div>
+      <div className="ml-auto flex items-center gap-[10px]">
+        {children}
+        <AccountButton />
+      </div>
     </header>
   );
 }
