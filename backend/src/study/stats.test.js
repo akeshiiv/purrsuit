@@ -166,3 +166,22 @@ test('buildLast7Days rounds the day total, not each session', () => {
   ];
   assert.equal(buildLast7Days(rows, '2026-07-11').at(-1).minutes, 2);
 });
+
+// Regression: this used to probe ICU directly, which accepts a bare UTC offset.
+// Postgres reads a signed offset by the POSIX convention, so `AT TIME ZONE
+// '+05:30'` shifts the opposite way from what the caller asked for and moves
+// every day boundary in the streak and the 7-day chart. profile.js already
+// refused these on the write path; the read path now shares that predicate.
+test('normalizeTz refuses bare UTC offsets rather than passing them to SQL', () => {
+  for (const offset of ['+05:30', '-08:00', '+00:00']) {
+    assert.equal(normalizeTz(offset), 'UTC', `${offset} must not reach AT TIME ZONE`);
+  }
+});
+
+test('normalizeTz still passes real IANA zones through untouched', () => {
+  for (const zone of ['Asia/Singapore', 'America/Los_Angeles', 'UTC']) {
+    assert.equal(normalizeTz(zone), zone);
+  }
+  assert.equal(normalizeTz('Not/AZone'), 'UTC');
+  assert.equal(normalizeTz(undefined), 'UTC');
+});
