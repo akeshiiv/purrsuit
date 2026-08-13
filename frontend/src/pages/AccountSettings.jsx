@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { useAuth } from '../components/AuthContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
@@ -14,6 +15,7 @@ const LABEL = 'p-label text-[11px] tracking-[.09em]';
 
 export default function AccountSettings() {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [game, setGame] = useState(null);
@@ -68,6 +70,9 @@ export default function AccountSettings() {
     try {
       const updated = await profileService.update(form);
       setProfile(updated);
+      // The header button renders from the context copy, so a save that only
+      // landed in local state would leave the avatar up there stale.
+      await refreshProfile();
       setMessage('Saved');
     } catch (caught) {
       setError(caught.message);
@@ -151,23 +156,12 @@ export default function AccountSettings() {
   const isAdmin = game?.me?.role === 'admin';
   const members = game?.members ?? [];
 
-  const accountPill = (
-    <div className="flex items-center gap-[10px] rounded-full border-3 border-gold-edge bg-gold py-[6px] pr-4 pl-[6px] shadow-[0_3px_0_var(--color-gold-shadow)]">
-      <PlayerAvatar
-        colour="#C08D45"
-        seed={profile?.id}
-        size={30}
-        src={form.avatarUrl}
-        well="#FFF8EA"
-      />
-      <span className="font-display text-[15px] font-extrabold text-ink-body">Account</span>
-    </div>
-  );
-
   return (
     // The tab bar points into /realm/*, so it only makes sense once the player
-    // has a realm — this route is reachable without one.
-    <Screen right={accountPill} tabs={Boolean(realm)}>
+    // has a realm — this route is reachable without one. The header's own
+    // account button marks this screen as current, so there is nothing to add
+    // to the right cluster here.
+    <Screen tabs={Boolean(realm)}>
       <div className="mx-auto flex max-w-[1372px] justify-center gap-[26px]">
         <Card
           as="form"
