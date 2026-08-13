@@ -60,10 +60,17 @@ export default function MapView() {
     setResult('');
     setQuestNotice('');
     const mine = cell.ownerMemberId === meId;
+    // Store coordinates, never the cell object. The map is replaced wholesale
+    // every 2.5s by the poller, and a captured cell froze at the moment of the
+    // click: DeployModal computed `willCapture`, the "send N or more" hint and
+    // the defender's troop count from a snapshot that could be minutes stale
+    // while sitting beside a live `me`. A defender who reinforced mid-decision
+    // was invisible, so the panel promised a capture the server then resolved as
+    // repelled — and the units were already spent.
     if (mine && cell.unitType) {
-      setSelected({ cell, mode: 'defend' });
+      setSelected({ x: cell.x, y: cell.y, mode: 'defend' });
     } else if (targets.has(cellKey(cell))) {
-      setSelected({ cell, mode: 'attack' });
+      setSelected({ x: cell.x, y: cell.y, mode: 'attack' });
     }
   }
 
@@ -77,8 +84,21 @@ export default function MapView() {
     await refresh();
   }
 
-  const defender = selected
-    ? map.members.find(member => member.id === selected.cell.ownerMemberId)
+  // Re-read the selected cell out of the freshest map on every render, so the
+  // panel always describes the board as it is now. If it stops being a legal
+  // target for the chosen mode — captured by someone else, or reinforced past
+  // what the player can beat — the selection is dropped rather than left
+  // describing a cell that no longer exists.
+  const selectedCell = selected
+    ? map.cells.find(cell => cell.x === selected.x && cell.y === selected.y)
+    : null;
+  const selectionValid = selectedCell && (
+    selected.mode === 'defend'
+      ? selectedCell.ownerMemberId === meId && Boolean(selectedCell.unitType)
+      : targets.has(cellKey(selectedCell))
+  );
+  const defender = selectionValid
+    ? map.members.find(member => member.id === selectedCell.ownerMemberId)
     : null;
 
   return (
@@ -92,7 +112,7 @@ export default function MapView() {
             interactive
             meId={meId}
             onCellClick={handleCellClick}
-            selectedKey={selected ? cellKey(selected.cell) : null}
+            selectedKey={selectionValid ? cellKey(selectedCell) : null}
             size={map.size}
           />
           <div className="mt-[14px] flex h-5 items-center gap-4 text-[12.5px] font-extrabold">
@@ -102,11 +122,11 @@ export default function MapView() {
           </div>
         </div>
 
-        {selected ? (
+        {selectionValid ? (
           <DeployModal
-            cell={selected.cell}
+            cell={selectedCell}
             defenderName={defender?.name ?? ''}
-            key={`${selected.mode}-${selected.cell.x}-${selected.cell.y}`}
+            key={`${selected.mode}-${selected.x}-${selected.y}`}
             me={map.me}
             mode={selected.mode}
             onClose={() => setSelected(null)}
