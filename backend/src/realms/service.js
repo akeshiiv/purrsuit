@@ -499,7 +499,36 @@ export async function memberRealmSummary(userId) {
   return rows[0] ? realmSummary(rows[0], rows[0].role) : null;
 }
 
+// True when the realm's season has run out and a rollover is due. Deliberately
+// unlocked and outside any transaction — see ensureSeasonFresh.
+async function rolloverLooksDue(realmId) {
+  const rows = await sql`
+    SELECT s.status, s.ends_at
+    FROM realms r
+    JOIN seasons s ON s.id = r.current_season_id
+    WHERE r.id = ${realmId}
+  `;
+  const season = rows[0];
+  if (!season) return false;
+  return season.status === 'active' && new Date() >= new Date(season.ends_at);
+}
+
 export async function ensureSeasonFresh(realmId) {
+  // Probe before locking. Nothing runs on a timer, so a season only needs
+  // rolling once per season_length_days — 7 days at the minimum — but this is
+  // called from every read path in the app, and the map (2.5s), dashboard (4s)
+  // and season-status (5s, app-wide) pollers reach it constantly for every
+  // member of the realm. Opening a transaction and taking `FOR UPDATE OF r, s`
+  // before even asking whether the season had expired serialised all of that
+  // read traffic on the same two exclusive row locks, each holding a pooled
+  // connection for its round trip, in direct contention with the attack/defend/
+  // buy transactions that genuinely need those locks.
+  //
+  // Losing the race here is harmless: the authoritative re-check below runs
+  // under the lock, and the rollover's own `status = 'active'` guard is what
+  // makes it happen exactly once regardless of how many callers arrive together.
+  if (!(await rolloverLooksDue(realmId))) return null;
+
   return withTransaction(async (tx) => {
     const current = await currentRealmSeasonRow(tx, realmId, { lock: true });
     if (!current) return null;
