@@ -423,16 +423,29 @@ async function rollCurrentSeason(tx, current, now) {
   });
   await insertCells(tx, { seasonId: newSeason.id, realmId: current.realm_id, cells });
 
+  // Reset the whole realm's economy in one statement, independently of home
+  // assignment. The two used to share a loop over `assignments`, which quietly
+  // made "your season resets" conditional on "you were given a slot": a member
+  // the assignment skipped kept their coins, units and battle record into the
+  // next season. Home coordinates are cleared here and re-set below, so a member
+  // without a slot is left homeless rather than pointing at last season's cell.
+  await tx`
+    UPDATE realm_members
+    SET coins = 0,
+        units_a = 0,
+        units_b = 0,
+        units_c = 0,
+        seconds_studied = 0,
+        battles_won = 0,
+        home_x = NULL,
+        home_y = NULL
+    WHERE realm_id = ${current.realm_id}
+  `;
+
   for (const assignment of assignments) {
     await tx`
       UPDATE realm_members
-      SET coins = 0,
-          units_a = 0,
-          units_b = 0,
-          units_c = 0,
-          seconds_studied = 0,
-          battles_won = 0,
-          home_x = ${assignment.x},
+      SET home_x = ${assignment.x},
           home_y = ${assignment.y}
       WHERE id = ${assignment.memberId}
     `;
@@ -800,9 +813,13 @@ export async function endSeasonNow(userId, realmId) {
     if (!admin) {
       throw realmError(403, 'NOT_ADMIN', 'Only the realm admin can do that.');
     }
+    // Admin already established, so there is nothing left to withhold: a realm
+    // parked with no current season is a different failure from "you are not the
+    // admin", and reporting it as NOT_ADMIN told the one person who could act
+    // that they had no permission to.
     const current = await currentRealmSeasonRow(tx, realmId, { lock: true });
     if (!current) {
-      throw realmError(403, 'NOT_ADMIN', 'Only the realm admin can do that.');
+      throw realmError(409, 'NOT_IN_ACTIVE_SEASON', 'This realm has no active season to end.');
     }
     const { endedSeason } = await rollCurrentSeason(tx, current, new Date());
     return { season: endedSeason };
