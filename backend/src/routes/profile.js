@@ -1,16 +1,11 @@
 import { Router } from 'express';
 import { sql } from '../../db.js';
 import { authenticate } from '../middleware.js';
+import { asyncHandler } from './handlers.js';
 import { validateProfilePatch, toProfile } from '../profile.js';
 import { memberRealmSummary } from '../realms/service.js';
 
 const router = Router();
-
-function asyncHandler(handler) {
-  return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
-}
 
 router.use(authenticate);
 

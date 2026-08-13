@@ -1,16 +1,10 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware.js';
-import { RealmError } from '../realms/service.js';
+import { asyncHandler, realmErrors } from './handlers.js';
 import { completeStudy, getStudyStats, startStudySession } from '../study/service.js';
 import { logTermination } from '../study/terminate.js';
 
 const router = Router();
-
-function asyncHandler(handler) {
-  return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
-}
 
 router.use(authenticate);
 
@@ -36,11 +30,6 @@ router.post('/study/terminate', asyncHandler(async (req, res) => {
   res.json(payload);
 }));
 
-router.use((err, req, res, next) => {
-  if (err instanceof RealmError) {
-    return res.status(err.status).json({ error: err.code, message: err.message });
-  }
-  return next(err);
-});
+router.use(realmErrors);
 
 export default router;
