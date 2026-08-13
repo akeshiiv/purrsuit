@@ -68,7 +68,16 @@ export default function AccountSettings() {
     setMessage('');
     setSaving(true);
     try {
-      const updated = await profileService.update(form);
+      // Omit an empty avatar rather than sending "". validateProfilePatch skips
+      // a field only when it is `undefined`, and isValidAvatarUrl('') is false —
+      // `new URL('')` throws — so an empty string was a hard 400 INVALID_AVATAR
+      // that threw away the name and colour edits in the same request. Any
+      // account whose Google profile had no photo starts with the field empty,
+      // so those users could never save this form at all, and the error named a
+      // field they had not touched. The mock hid it by validating neither.
+      const patch = { ...form };
+      if (patch.avatarUrl.trim() === '') delete patch.avatarUrl;
+      const updated = await profileService.update(patch);
       setProfile(updated);
       // The header button renders from the context copy, so a save that only
       // landed in local state would leave the avatar up there stale.
