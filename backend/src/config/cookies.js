@@ -22,9 +22,10 @@ export const authCookieOptions = {
   maxAge: COOKIE_MAX_AGE,
 };
 
-// Client-visible "logged in" flag: readable by JS.
-export const flagCookieOptions = {
-  ...baseCookieOptions,
-  httpOnly: false,
-  maxAge: COOKIE_MAX_AGE,
-};
+// A `logged_in` flag cookie used to be set here alongside the token, deliberately
+// JS-readable so the SPA could see it. Nothing ever read it: the client asks
+// GET /auth/me instead, which is the only answer that can be trusted anyway —
+// a cookie the page can read is also a cookie the page can be wrong about, and
+// it went on claiming a session for its full 7 days after the token behind it
+// had expired. Removed rather than kept in step, so there is one cookie that
+// means "signed in" and the server is the only thing that can set it.
