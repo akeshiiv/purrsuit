@@ -364,7 +364,7 @@ export async function getStudyStats(userId, tzInput) {
         COALESCE(SUM(duration), 0)::int AS total_seconds,
         COUNT(*)::int AS session_count,
         COALESCE(SUM(coins_earned), 0)::int AS total_coins,
-        COUNT(DISTINCT (created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date)::int AS active_days
+        COUNT(DISTINCT (created_at AT TIME ZONE ${tz})::date)::int AS active_days
       FROM sessions
       WHERE user_id = ${userId}
     `,
@@ -374,7 +374,7 @@ export async function getStudyStats(userId, tzInput) {
     // costs no scan and no round trip, and the two cannot disagree about a
     // session that lands mid-request the way two separate reads could.
     sql`
-      SELECT to_char((created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS day,
+      SELECT to_char((created_at AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS day,
              COALESCE(SUM(duration), 0)::int AS seconds
       FROM sessions
       WHERE user_id = ${userId}
@@ -389,7 +389,7 @@ export async function getStudyStats(userId, tzInput) {
           COALESCE(SUM(duration), 0)::int AS total_seconds,
           COUNT(*)::int AS session_count,
           COALESCE(SUM(coins_earned), 0)::int AS total_coins,
-          COUNT(DISTINCT (created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date)::int AS active_days
+          COUNT(DISTINCT (created_at AT TIME ZONE ${tz})::date)::int AS active_days
         FROM sessions
         WHERE user_id = ${userId} AND season_id = ${seasonId}
       `,

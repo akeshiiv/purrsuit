@@ -113,9 +113,9 @@ export async function leaderboard(userId, { since } = {}) {
   // is not the same span of hours as yesterday in Chicago. One shared date would
   // quietly hand or withhold a day from everyone in the wrong half of the world.
   //
-  // `sessions.created_at` is a bare TIMESTAMP holding UTC wall time, so it has to
-  // be labelled UTC before it can be converted — the same
-  // `AT TIME ZONE 'UTC' AT TIME ZONE <zone>` pattern getStudyStats uses.
+  // `sessions.created_at` is TIMESTAMPTZ (migration 012), so a single
+  // `AT TIME ZONE <zone>` takes the stored instant to that member's calendar
+  // day — the same one-step conversion getStudyStats uses.
   //
   // Scope is all-time, matching the streak a player sees on their own stats: a
   // streak is a study habit, not a season score, and zeroing everyone's at each
@@ -123,7 +123,7 @@ export async function leaderboard(userId, { since } = {}) {
   const studyDays = sql`
     SELECT rm.user_id,
            to_char(
-             (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE COALESCE(u.time_zone, 'UTC'))::date,
+             (s.created_at AT TIME ZONE COALESCE(u.time_zone, 'UTC'))::date,
              'YYYY-MM-DD'
            ) AS day,
            to_char(
