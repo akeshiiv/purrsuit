@@ -14,15 +14,29 @@ export function createCaptureController({ getDisplayMedia = (c) => navigator.med
   let video = null;
   let endedCb = null;
 
-  return {
+  const controller = {
+    // Owns its own cleanup on a failed start. Everything after getDisplayMedia
+    // can throw — most realistically `video.play()`, which rejects in browsers
+    // that consider the user gesture spent by the time the async picker resolves
+    // (Safari NotAllowedError, Chrome AbortError). The stream is live by then,
+    // and the only caller publishes its handle to the hook's refs *after* start
+    // resolves, so the hook's own cleanup had nothing to stop: the browser kept
+    // showing "Purrsuit is sharing your screen" and went on capturing until the
+    // tab was closed. Stopping here rather than relying on the caller keeps that
+    // true for any future caller too.
     async start() {
       stream = await getDisplayMedia({ video: { frameRate: 1 }, audio: false });
-      const [track] = stream.getVideoTracks();
-      track.addEventListener('ended', () => endedCb && endedCb());
-      video = document.createElement('video');
-      video.srcObject = stream;
-      video.muted = true;
-      await video.play();
+      try {
+        const [track] = stream.getVideoTracks();
+        track.addEventListener('ended', () => endedCb && endedCb());
+        video = document.createElement('video');
+        video.srcObject = stream;
+        video.muted = true;
+        await video.play();
+      } catch (err) {
+        controller.stop();
+        throw err;
+      }
     },
     onEnded(cb) { endedCb = cb; },
     // Returns a downscaled ImageBitmap. Caller MUST call bitmap.close() after use.
@@ -41,4 +55,6 @@ export function createCaptureController({ getDisplayMedia = (c) => navigator.med
       stream = null;
     },
   };
+
+  return controller;
 }
