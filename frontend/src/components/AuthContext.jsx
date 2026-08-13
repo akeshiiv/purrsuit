@@ -3,10 +3,39 @@ import { createContext, useCallback, useContext, useState, useEffect } from 'rea
 import { loginWithGoogle, logout } from '../services/auth-service.js';
 import { profileService } from '../services/index.js';
 import { browserTz } from '../utils/time.js';
+import SessionUnavailable from './SessionUnavailable.jsx';
 
 const AuthContext = createContext(null);
 const API_URL = import.meta.env.VITE_API_URL;
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+
+// The only statuses that are the server's verdict on the cookie. Everything else
+// a response can carry — 429 from a rate limiter, 5xx from a backend that is
+// still waking up, a request that never completed — leaves the question
+// unanswered, and an unanswered question is not a "no".
+//
+// Collapsing the two is how a signed-in player ends up looking at the sign-in
+// screen after a refresh: this check is the sole source of session state and it
+// runs on every page load, so one bad response is all it takes. The cookie is
+// untouched and still valid; only the app's belief about it is wrong.
+const SESSION_VERDICT_STATUSES = new Set([401, 403]);
+
+// A cold serverless backend or a suspended database usually answers on the next
+// try a moment later, so an unanswered check is worth repeating a couple of
+// times before the app gives up and says so.
+const SESSION_CHECK_RETRIES = 2;
+const SESSION_RETRY_BASE_MS = 400;
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// True/false when the server ruled on the cookie; throws when it did not, which
+// is what separates "signed out" from "ask again".
+async function readSession() {
+  const response = await fetch(`${API_URL}/auth/me`, { credentials: 'include' });
+  if (response.ok) return true;
+  if (SESSION_VERDICT_STATUSES.has(response.status)) return false;
+  throw new Error(`Session check failed with status ${response.status}`);
+}
 
 // The browser is the only thing that knows the player's zone, and it moves when
 // they travel — the server can only ever hold the copy the client last told it.
@@ -44,8 +73,12 @@ async function syncStoredTimeZone(profile) {
 }
 
 export function AuthProvider({ children }) {
-  const [loggedIn, setLoggedIn] = useState(USE_MOCK);
-  const [loading, setLoading] = useState(!USE_MOCK);
+  // Four states, not a boolean pair: 'checking' and 'unavailable' are both
+  // "not signed in" to a boolean, and only one of them should ever reach the
+  // sign-in screen. `loggedIn` stays in the context value, derived, so every
+  // consumer keeps reading the one question it actually cares about.
+  const [status, setStatus] = useState(USE_MOCK ? 'signed-in' : 'checking');
+  const loggedIn = status === 'signed-in';
   // The signed-in player's own profile, held here because it is chrome-level
   // data: the header's account button rides above every screen and needs the
   // avatar, colour and id. Screens that edit the profile call `refreshProfile`
@@ -69,10 +102,32 @@ export function AuthProvider({ children }) {
       return undefined;
     }
 
-    fetch(`${API_URL}/auth/me`, { credentials: 'include' })
-      .then(r => setLoggedIn(r.ok))
-      .catch(() => setLoggedIn(false))
-      .finally(() => setLoading(false));
+    let active = true;
+
+    (async () => {
+      for (let attempt = 0; attempt <= SESSION_CHECK_RETRIES; attempt += 1) {
+        if (attempt > 0) {
+          await delay(SESSION_RETRY_BASE_MS * 2 ** (attempt - 1));
+          if (!active) return;
+        }
+
+        try {
+          const signedIn = await readSession();
+          if (active) setStatus(signedIn ? 'signed-in' : 'signed-out');
+          return;
+        } catch {
+          // Kept quiet per attempt; the screen below is where this is reported
+          // once the retries are spent.
+          if (!active) return;
+        }
+      }
+
+      if (active) setStatus('unavailable');
+    })();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // One profile read per sign-in, feeding both the header button and the
@@ -103,16 +158,22 @@ export function AuthProvider({ children }) {
   const handleLogout = async () => {
     if (USE_MOCK) {
       setProfile(null);
-      setLoggedIn(false);
+      setStatus('signed-out');
       return;
     }
 
     await logout();
     setProfile(null);
-    setLoggedIn(false);
+    setStatus('signed-out');
   };
 
-  if (loading) return null; // can be a cute loading page instead
+  if (status === 'checking') return null; // can be a cute loading page instead
+  // Deliberately blocking rather than falling through to the app. Which way the
+  // session actually went is unknown here, and both guesses are worse than
+  // saying so: "signed out" is the bug this replaces, and "signed in" only moves
+  // the failure to whichever screen loads next, where it reads as that screen
+  // being broken.
+  if (status === 'unavailable') return <SessionUnavailable />;
 
   return (
     <AuthContext.Provider
@@ -120,7 +181,7 @@ export function AuthProvider({ children }) {
         loggedIn,
         profile,
         refreshProfile,
-        loginWithGoogle: USE_MOCK ? () => setLoggedIn(true) : loginWithGoogle,
+        loginWithGoogle: USE_MOCK ? () => setStatus('signed-in') : loginWithGoogle,
         logout: handleLogout,
       }}
     >

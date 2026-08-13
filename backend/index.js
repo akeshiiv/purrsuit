@@ -16,7 +16,7 @@ import mapRouter from './src/routes/map.js';
 import seasonRouter from './src/routes/season.js';
 import profileRouter from './src/routes/profile.js';
 import { doubleCsrfProtection, generateCsrfToken } from './src/csrf.js';
-import { globalLimiter, authLimiter } from './src/rateLimit.js';
+import { globalLimiter, authLimiter, sessionCheckLimiter } from './src/rateLimit.js';
 
 const app = express()
 
@@ -39,7 +39,18 @@ app.get('/api/csrf-token', (req, res) => {
 });
 
 // ROUTERS
-app.use('/auth', authLimiter, authRouter);
+
+// The session check gets its own budget; the OAuth routes keep the strict one.
+// `req.path` is the remainder after the '/auth' mount point, so it is '/me' for
+// the route being singled out. Dispatching here rather than applying a limiter
+// inside authRouter keeps every request on exactly one of the two — handing the
+// same request to both would double-count it and trip whichever is tighter.
+function limitAuthRoute(req, res, next) {
+  const limiter = req.path === '/me' ? sessionCheckLimiter : authLimiter;
+  return limiter(req, res, next);
+}
+
+app.use('/auth', limitAuthRoute, authRouter);
 
 // API ROUTES
 

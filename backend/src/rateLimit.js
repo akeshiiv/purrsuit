@@ -38,12 +38,31 @@ export const globalLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later.' },
 });
 
-// Stricter limiter for the auth routes (OAuth start/callback, /me, logout) to blunt
-// abuse. Kept generous enough not to trip the /auth/me check that the SPA runs on
-// every page load — auth is Google OAuth, so there's no password to brute-force.
+// Stricter limiter for the OAuth routes (login start, callback, logout) to blunt
+// abuse. Auth is Google OAuth, so there's no password to brute-force; the budget
+// only has to cover a human clicking "sign in" a reasonable number of times.
 export const authLimiter = rateLimit({
   ...baseOptions,
   limit: 50,
   store: storeFor('auth'),
   message: { error: 'Too many authentication attempts, please try again later.' },
+});
+
+// GET /auth/me only, and deliberately not on the budget above. The SPA runs this
+// check on every page load — twice per load under StrictMode in dev — so at 50
+// it is the *reloading player*, not the attacker, who exhausts the OAuth budget,
+// and a 429 there means being shown the sign-in screen while holding a valid
+// cookie. It reads a cookie the caller already has and reveals nothing they
+// could not learn by loading the app, so repeating it is not worth much to
+// anyone; the limit is here to bound cost, not to defend the session.
+//
+// The frontend no longer treats a 429 as "signed out" either — this and
+// `SESSION_VERDICT_STATUSES` in AuthContext.jsx are the two halves of that fix,
+// and neither alone is enough: this one keeps the check from failing, that one
+// keeps a failure from lying about the session.
+export const sessionCheckLimiter = rateLimit({
+  ...baseOptions,
+  limit: 200,
+  store: storeFor('session'),
+  message: { error: 'Too many requests, please try again later.' },
 });
