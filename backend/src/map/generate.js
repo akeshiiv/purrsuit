@@ -79,14 +79,17 @@ function adjacentCoords({ x, y }, size) {
   ));
 }
 
-function ensureHomeHasRegularNeighbour(cellsByKey, home, size) {
-  const adjacent = adjacentCoords(home, size)
+// A player standing on a slot needs somewhere to go: at least one orthogonal
+// neighbour has to be land, or their first attack has no legal target. Presets
+// can put water anywhere, so this repairs the slot's surroundings after the fact.
+function ensureSlotHasLandNeighbour(cellsByKey, slot, size) {
+  const adjacent = adjacentCoords(slot, size)
     .map((coord) => cellsByKey.get(cellKey(coord.x, coord.y)));
   if (adjacent.some((cell) => cell?.type === 'regular')) return;
 
-  const firstNonHome = adjacent.find((cell) => cell && cell.type !== 'home');
-  if (firstNonHome) {
-    firstNonHome.type = 'regular';
+  const first = adjacent.find(Boolean);
+  if (first) {
+    first.type = 'regular';
   }
 }
 
@@ -96,16 +99,24 @@ export function generateSeasonCells({ realmId, seasonNumber, maxPlayers, mapPres
   const cellsByKey = new Map(cells.map((cell) => [cellKey(cell.x, cell.y), cell]));
   const homes = homeSlotsForSeason({ realmId, seasonNumber, maxPlayers });
 
-  for (const home of homes) {
-    const cell = cellsByKey.get(cellKey(home.x, home.y));
-    cell.type = 'home';
+  // Seeded slots are cleared to 'regular', NOT pre-marked 'home'. A slot only
+  // becomes a home when a player actually takes it — assignHomeCell on
+  // create/join, or assignMembersToGeneratedHomes on rollover. Marking all
+  // `maxPlayers` slots up front left every unclaimed slot as an unowned 'home',
+  // and attack() refuses anything that is not 'regular', so a 10-player realm
+  // with 3 players had 7 cells nobody could ever claim — for every season, since
+  // the rollover regenerates from maxPlayers rather than the live member count.
+  // Clearing to 'regular' also keeps a slot the preset drew as water habitable.
+  for (const slot of homes) {
+    const cell = cellsByKey.get(cellKey(slot.x, slot.y));
+    cell.type = 'regular';
     cell.ownerMemberId = null;
     cell.unitType = null;
     cell.troopCount = 0;
   }
 
-  for (const home of homes) {
-    ensureHomeHasRegularNeighbour(cellsByKey, home, size);
+  for (const slot of homes) {
+    ensureSlotHasLandNeighbour(cellsByKey, slot, size);
   }
 
   return cells;
