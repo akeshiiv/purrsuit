@@ -40,8 +40,10 @@ function runRollover({ endedStateVersion, seasonNumber = 4 }) {
           }],
         });
       }
-      if (/COUNT\(c\.id\)::int AS territories/i.test(sql) && /LIMIT 1/i.test(sql)) {
-        return Promise.resolve({ rows: [{ member_id: 5, winner_name: 'player1', territories: 12 }] });
+      // The champion is read back out of the season_results snapshot, so the
+      // headline winner and rank 1 of the table cannot disagree.
+      if (/FROM season_results sr/i.test(sql) && /sr\.rank = 1/i.test(sql)) {
+        return Promise.resolve({ rows: [{ user_id: 1, member_id: 5, winner_name: 'player1' }] });
       }
       if (/UPDATE seasons SET status = 'ended'/i.test(sql)) {
         // The rollover bumps the ending season's version as it closes it.
@@ -245,8 +247,10 @@ function runJoin({ endsAt, seasonStatus = 'active', rollTakes = true }) {
           })],
         });
       }
-      if (/COUNT\(c\.id\)::int AS territories/i.test(sql) && /LIMIT 1/i.test(sql)) {
-        return Promise.resolve({ rows: [{ member_id: 5, winner_name: 'player1', territories: 12 }] });
+      // The champion is read back out of the season_results snapshot, so the
+      // headline winner and rank 1 of the table cannot disagree.
+      if (/FROM season_results sr/i.test(sql) && /sr\.rank = 1/i.test(sql)) {
+        return Promise.resolve({ rows: [{ user_id: 1, member_id: 5, winner_name: 'player1' }] });
       }
       if (/UPDATE seasons SET status = 'ended'/i.test(sql)) {
         if (!rollTakes) return Promise.resolve({ rows: [] });
@@ -442,4 +446,27 @@ test('a non-admin is still refused before the flag is even inspected', async () 
   const { error } = await runSettings({ antiCheat: 'nonsense' }, { role: null });
   assert.equal(error.status, 403);
   assert.equal(error.code, 'NOT_ADMIN');
+});
+
+// Regression: the winner used to come from a separate query that broke territory
+// ties on join order, while season_results breaks them on battles won. On any tie
+// the end-of-season card crowned one player in its headline and a different one
+// in the table printed directly underneath it.
+test('the rollover crowns the winner from the standings snapshot it just wrote', async () => {
+  const { queries } = await runRollover({ endedStateVersion: 10 });
+
+  const snapshotIndex = queries.findIndex((q) => /INSERT INTO season_results/i.test(q.sql));
+  const championIndex = queries.findIndex(
+    (q) => /FROM season_results sr/i.test(q.sql) && /sr\.rank = 1/i.test(q.sql),
+  );
+  const crownIndex = queries.findIndex((q) => /UPDATE seasons SET winner_member_id/i.test(q.sql));
+
+  assert.ok(snapshotIndex >= 0, 'writes the standings snapshot');
+  assert.ok(championIndex > snapshotIndex, 'reads rank 1 back out of that snapshot');
+  assert.ok(crownIndex > championIndex, 'and crowns from it');
+  assert.equal(
+    queries.filter((q) => /ORDER BY territories DESC/i.test(q.sql)).length,
+    0,
+    'no second, separately-ordered winner query survives',
+  );
 });

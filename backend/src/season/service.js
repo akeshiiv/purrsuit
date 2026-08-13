@@ -56,8 +56,9 @@ async function currentSeasonRow(realmId) {
            winner_user.name AS winner_name
     FROM realms r
     JOIN seasons s ON s.id = r.current_season_id
-    LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-    LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+    LEFT JOIN season_results winner_result
+           ON winner_result.season_id = s.id AND winner_result.rank = 1
+    LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
     WHERE r.id = ${realmId}
   `;
   return rows[0] ?? null;
@@ -154,8 +155,9 @@ async function latestEndedSeasonRow(realmId) {
            s.ends_at,
            winner_user.name AS winner_name
     FROM seasons s
-    LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-    LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+    LEFT JOIN season_results winner_result
+           ON winner_result.season_id = s.id AND winner_result.rank = 1
+    LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
     WHERE s.realm_id = ${realmId} AND s.status = 'ended'
     ORDER BY s.season_number DESC
     LIMIT 1

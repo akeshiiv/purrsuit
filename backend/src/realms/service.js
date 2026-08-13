@@ -266,8 +266,9 @@ async function currentRealmSeasonRow(query, realmId, { lock = false } = {}) {
             winner_user.name AS winner_name
      FROM realms r
      JOIN seasons s ON s.id = r.current_season_id
-     LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-     LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+     LEFT JOIN season_results winner_result
+            ON winner_result.season_id = s.id AND winner_result.rank = 1
+     LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
      WHERE r.id = $1${lockSql}`,
     [realmId],
   );
@@ -295,8 +296,9 @@ async function dashboardPayload(userId, realmId) {
     FROM realms r
     JOIN seasons s ON s.id = r.current_season_id
     JOIN realm_members me ON me.realm_id = r.id AND me.user_id = ${userId}
-    LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-    LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+    LEFT JOIN season_results winner_result
+           ON winner_result.season_id = s.id AND winner_result.rank = 1
+    LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
     WHERE r.id = ${realmId}
   `;
   const row = rows[0];
@@ -317,31 +319,33 @@ async function dashboardPayload(userId, realmId) {
   };
 }
 
-async function territoryLeader(tx, realmId, seasonId) {
+// The champion, read back out of the standings snapshot that was just written.
+// Deriving it from the snapshot rather than from a second, separately-ordered
+// query is the point: the old `territoryLeader` broke ties on join order while
+// `season_results` breaks them on battles won, so on any territory tie the
+// headline crowned one player and the table printed underneath it crowned
+// another — on the same card.
+async function snapshotChampion(tx, realmId, seasonId) {
   const rows = await tx`
-    SELECT rm.id AS member_id,
+    SELECT sr.user_id,
            u.name AS winner_name,
-           COUNT(c.id)::int AS territories
-    FROM realm_members rm
-    JOIN users u ON u.id = rm.user_id
-    LEFT JOIN cells c ON c.owner_member_id = rm.id AND c.season_id = ${seasonId}
-    WHERE rm.realm_id = ${realmId}
-    GROUP BY rm.id, u.name, rm.joined_at
-    ORDER BY territories DESC, rm.joined_at ASC, rm.id ASC
-    LIMIT 1
+           rm.id AS member_id
+    FROM season_results sr
+    JOIN users u ON u.id = sr.user_id
+    LEFT JOIN realm_members rm ON rm.user_id = sr.user_id AND rm.realm_id = ${realmId}
+    WHERE sr.season_id = ${seasonId} AND sr.rank = 1
   `;
   return rows[0] ?? null;
 }
 
 async function rollCurrentSeason(tx, current, now) {
-  const winner = await territoryLeader(tx, current.realm_id, current.season_id);
-  const winnerMemberId = winner?.member_id ?? null;
-  const winnerName = winner?.winner_name ?? null;
+  // Claim the rollover first. `status = 'active'` is the idempotency guard: a
+  // second transaction that reaches here finds nothing to end and backs out
+  // below, so the snapshot and the board reset happen exactly once.
   const endedRows = await tx`
     UPDATE seasons
     SET status = 'ended',
         ended_at = ${now},
-        winner_member_id = ${winnerMemberId},
         state_version = state_version + 1
     WHERE id = ${current.season_id} AND status = 'active'
     RETURNING id, season_number, status, started_at, ends_at, state_version
@@ -393,6 +397,21 @@ async function rollCurrentSeason(tx, current, now) {
     ON CONFLICT (season_id, user_id) DO NOTHING
   `;
 
+  // Crown from the snapshot that was just written, so the headline and the table
+  // under it can never disagree. `winner_member_id` is kept in step for anything
+  // that still reads it, but the name displayed to players is resolved through
+  // `season_results` (see the winner joins on the read queries): that column is
+  // an FK to realm_members declared ON DELETE SET NULL, so a champion who later
+  // leaves or is kicked would otherwise erase their own name from every season
+  // they won, leaving "Nobody claimed this season" above a table still showing
+  // them at rank 1.
+  const champion = await snapshotChampion(tx, current.realm_id, current.season_id);
+  await tx`
+    UPDATE seasons
+    SET winner_member_id = ${champion?.member_id ?? null}
+    WHERE id = ${current.season_id}
+  `;
+
   await tx`DELETE FROM cells WHERE season_id = ${current.season_id}`;
 
   const { cells, assignments } = assignMembersToGeneratedHomes({
@@ -426,7 +445,7 @@ async function rollCurrentSeason(tx, current, now) {
   `;
 
   return {
-    endedSeason: seasonPayload({ ...endedRows[0], winner_name: winnerName }),
+    endedSeason: seasonPayload({ ...endedRows[0], winner_name: champion?.winner_name ?? null }),
     newSeason: seasonPayload(newSeason),
   };
 }
