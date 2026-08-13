@@ -55,8 +55,14 @@ async function run() {
         console.log(`applied: ${filename}`);
       } catch (err) {
         await client.query('ROLLBACK');
-        console.error(`FAILED: ${filename} — ${err.message}`);
-        process.exit(1);
+        // Rethrow rather than process.exit(1) here. exit() is immediate: it
+        // skips the `finally` below that closes the client, and because stdout
+        // and stderr are asynchronous when they are pipes — which is what CI
+        // hands us — it can truncate the very line explaining what failed,
+        // leaving a red job with no reason on it. Unwinding normally lets the
+        // client close, lets Node drain both streams, and still exits non-zero
+        // via the handler at the bottom of this file.
+        throw new Error(`FAILED: ${filename} — ${err.message}`, { cause: err });
       }
     }
 
@@ -72,6 +78,8 @@ async function run() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   run().catch((err) => {
     console.error(err);
-    process.exit(1);
+    // exitCode rather than exit(): Node exits once the event loop drains, so
+    // the message above is flushed even when stderr is a pipe.
+    process.exitCode = 1;
   });
 }

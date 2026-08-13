@@ -31,18 +31,6 @@ export function generateJoinCode() {
   return code;
 }
 
-export function releaseTerritoryFromCells(cells, memberId) {
-  return cells.map((cell) => {
-    if (cell.ownerMemberId !== memberId) return { ...cell };
-    return {
-      ...cell,
-      type: cell.type === 'home' ? 'regular' : cell.type,
-      ownerMemberId: null,
-      unitType: null,
-      troopCount: 0,
-    };
-  });
-}
 
 export function normalizeRealmSettings(input = {}) {
   const name = typeof input.name === 'string' ? input.name.trim() : '';
