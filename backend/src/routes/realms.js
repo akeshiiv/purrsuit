@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware.js';
+import { asyncHandler, realmErrors } from './handlers.js';
 import {
   RealmError,
   createRealm,
@@ -12,12 +13,6 @@ import {
 } from '../realms/service.js';
 
 const router = Router();
-
-function asyncHandler(handler) {
-  return (req, res, next) => {
-    Promise.resolve(handler(req, res, next)).catch(next);
-  };
-}
 
 function parseRealmId(value) {
   const id = Number(value);
@@ -69,11 +64,6 @@ router.patch('/realms/:id/settings', asyncHandler(async (req, res) => {
   res.json(payload);
 }));
 
-router.use((err, req, res, next) => {
-  if (err instanceof RealmError) {
-    return res.status(err.status).json({ error: err.code, message: err.message });
-  }
-  return next(err);
-});
+router.use(realmErrors);
 
 export default router;

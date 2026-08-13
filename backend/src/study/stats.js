@@ -2,18 +2,24 @@
 // (src/study/service.js); this module derives the response shape and computes
 // the streak, so the rules can be unit-tested in isolation (matches coins.js /
 // profile.js).
+import { isValidTimeZone } from '../profile.js';
 
 // Return `tz` when it is a valid IANA time zone, otherwise 'UTC'. Guards the
 // SQL `AT TIME ZONE` argument and normalises absent/garbage input.
+//
+// Shares one predicate with the PATCH /api/profile validator rather than
+// probing ICU again here. The two had drifted: this copy accepted a bare UTC
+// offset ('+05:30') because ICU formats one happily, while isValidTimeZone
+// rejects it on purpose — Postgres reads a signed offset by the POSIX
+// convention, so `AT TIME ZONE '+05:30'` shifts the opposite way from what the
+// caller means and silently moves every day boundary. The `?tz=` query
+// parameter on GET /api/study/stats reaches this directly from the client.
+//
+// What still differs is the response to a bad value, which is the point of the
+// two names: a tolerant read falls back to UTC (a junk `?tz=` must not 500 the
+// stats page), while an explicit write refuses.
 export function normalizeTz(tz) {
-  if (typeof tz !== 'string' || tz.length === 0) return 'UTC';
-  try {
-    // Throws RangeError for an unknown time zone.
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return tz;
-  } catch {
-    return 'UTC';
-  }
+  return isValidTimeZone(tz) ? tz : 'UTC';
 }
 
 // Assemble a StatBlock from raw SQL aggregates, adding zero-guarded rounded

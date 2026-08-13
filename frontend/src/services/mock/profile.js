@@ -21,13 +21,53 @@ function isValidTimeZone(tz) {
   }
 }
 
+// The remaining three rules the real validator applies (backend/src/profile.js,
+// contract docs/api-contract.md). They were missing here, so the mock accepted
+// values the deployed API rejects: an emptied Name field saved fine in mock mode
+// and rendered a blank player everywhere, then returned 400 INVALID_NAME in
+// production. AccountSettings sends all three on every save from free-text
+// inputs with no client-side validation, so this mock is the only thing standing
+// in for the server's rules while VITE_USE_MOCK=true — the mode the README
+// recommends for all UI work.
+const COLOUR_PATTERN = /^#[0-9a-f]{6}$/i;
+
+function isValidName(name) {
+  if (typeof name !== 'string') return false;
+  const trimmed = name.trim();
+  return trimmed.length >= 1 && trimmed.length <= 32;
+}
+
+function isValidAvatarUrl(url) {
+  if (typeof url !== 'string') return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export async function get() {
   return profilePayload();
 }
 
 export async function update(profile) {
   // Fields are independent and optional, so only a key that is actually present
-  // is validated — omitting `timeZone` must never clear the stored one.
+  // is validated — omitting `timeZone` must never clear the stored one. Checked
+  // in the contract's documented order: name -> colour -> avatar -> timeZone ->
+  // hasOnboarded, so the mock reports the same field the real API would.
+  if (profile.name !== undefined && !isValidName(profile.name)) {
+    throw mockError('INVALID_NAME', 'name must be 1–32 characters');
+  }
+
+  if (profile.colour !== undefined && !COLOUR_PATTERN.test(String(profile.colour))) {
+    throw mockError('INVALID_COLOUR', 'colour must be a #rrggbb hex value');
+  }
+
+  if (profile.avatarUrl !== undefined && !isValidAvatarUrl(profile.avatarUrl)) {
+    throw mockError('INVALID_AVATAR', 'avatarUrl must be an http(s) URL');
+  }
+
   if (profile.timeZone !== undefined && !isValidTimeZone(profile.timeZone)) {
     throw mockError('INVALID_TIMEZONE', 'timeZone must be a valid IANA time zone.');
   }

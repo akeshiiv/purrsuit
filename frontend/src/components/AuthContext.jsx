@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useState, useEffect } from 'react';
 import { loginWithGoogle, logout } from '../services/auth-service.js';
+import { setUnauthenticatedHandler } from '../services/api.js';
 import { profileService } from '../services/index.js';
 import { browserTz } from '../utils/time.js';
 import SessionUnavailable from './SessionUnavailable.jsx';
@@ -95,6 +96,23 @@ export function AuthProvider({ children }) {
       // seeded cat art, and no screen's own data depends on this read.
       return null;
     }
+  }, []);
+
+  // The session check runs once, at mount. Without this, a cookie that expires
+  // (or is cleared) while the app is open leaves the SPA convinced it is still
+  // signed in: every screen just renders its own inline "Sign in to continue"
+  // where its data should be, forever, and only a manual reload gets the player
+  // back to the sign-in page. The API answers 401 for exactly one reason — the
+  // token is missing or invalid — so it is a verdict on the session, and the
+  // same verdict this provider was built to act on.
+  useEffect(() => {
+    if (USE_MOCK) return undefined;
+
+    setUnauthenticatedHandler(() => {
+      setProfile(null);
+      setStatus((current) => (current === 'signed-in' ? 'signed-out' : current));
+    });
+    return () => setUnauthenticatedHandler(null);
   }, []);
 
   useEffect(() => {

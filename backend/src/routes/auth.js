@@ -2,7 +2,7 @@ import { Router } from 'express';
 import passport from '../passport.js';
 import { signToken, verifyToken } from '../middleware.js';
 import { config } from '../config/env.js';
-import { authCookieOptions, flagCookieOptions, baseCookieOptions } from '../config/cookies.js';
+import { authCookieOptions, baseCookieOptions } from '../config/cookies.js';
 import { issueState, verifyState, STATE_COOKIE, STATE_COOKIE_MAX_AGE } from '../auth/oauthState.js';
 
 const router = Router();
@@ -13,6 +13,14 @@ const REDIRECT_URL = config.FRONTEND_URL; // after successful login, homepage wi
 // without a trailing slash produces the same target.
 const STATE_FAILURE_URL = new URL(REDIRECT_URL);
 STATE_FAILURE_URL.searchParams.set('error', 'oauth_state');
+
+// Where passport sends a callback it could not complete — Google returned an
+// error, the user cancelled at the consent screen, or the code exchange failed.
+// A bare '/' is relative to the API, so it landed the user on the backend's own
+// root and its plain-text "The Purrsuit API is working!!!" with no way back to
+// the app. They belong on the frontend, which renders the sign-in screen.
+const AUTH_FAILURE_URL = new URL(REDIRECT_URL);
+AUTH_FAILURE_URL.searchParams.set('error', 'oauth_failed');
 
 // The state cookie must survive Google's cross-site top-level redirect back to
 // the callback. baseCookieOptions gives SameSite=None; Secure in production and
@@ -47,11 +55,10 @@ function requireValidState(req, res, next) {
 // google redirects back
 router.get('/google/callback',
   requireValidState,
-  passport.authenticate('google', { session: false, failureRedirect: '/' }),
+  passport.authenticate('google', { session: false, failureRedirect: AUTH_FAILURE_URL.toString() }),
   (req, res) => {
     const token = signToken({ id: req.user.id, email: req.user.email });
     res.cookie('token', token, authCookieOptions);
-    res.cookie('logged_in', 'true', flagCookieOptions);
     res.redirect(REDIRECT_URL);
   }
 );
@@ -69,10 +76,10 @@ router.get('/me', (req, res) => {
   }
 });
 
-// upon logout, clear cookies — options must match those used to set them (minus maxAge).
+// upon logout, clear the session cookie — options must match those used to set
+// it (minus maxAge), or the browser keeps it.
 router.post('/logout', (req, res) => {
   res.clearCookie('token', { ...baseCookieOptions, httpOnly: true });
-  res.clearCookie('logged_in', { ...baseCookieOptions, httpOnly: false });
   res.json({ success: true });
 });
 

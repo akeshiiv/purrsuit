@@ -92,3 +92,55 @@ test('exposes a parameterized query helper for dynamic bulk SQL inside transacti
     values: [1, 2],
   });
 });
+
+// Regression: the placeholder used to be emitted only when `values[i] !== undefined`,
+// which conflated the trailing template fragment (genuinely has no value) with a
+// caller passing an absent field. The value was still sent to the driver, so the
+// statement came out with a hole in it — `SELECT , $2` — and failed as a syntax
+// error, where production's neon() driver binds NULL for the same call.
+test('an undefined interpolation still gets a placeholder rather than a hole', async () => {
+  const seen = [];
+  _setTransactionPool({
+    connect: () => Promise.resolve({
+      query(text, values) {
+        seen.push({ text: String(text), values });
+        return Promise.resolve({ rows: [] });
+      },
+      release() {},
+    }),
+  });
+
+  const missing = undefined;
+  await withTransaction(async (tx) => {
+    await tx`SELECT ${missing}, ${7} FROM t WHERE k = ${'x'}`;
+  });
+
+  const statement = seen.find((q) => /SELECT/.test(q.text));
+  assert.equal(
+    statement.text,
+    'SELECT $1, $2 FROM t WHERE k = $3',
+    'every interpolation gets its own placeholder, by position',
+  );
+  assert.deepEqual(statement.values, [undefined, 7, 'x']);
+});
+
+test('the trailing template fragment does not get a placeholder of its own', async () => {
+  const seen = [];
+  _setTransactionPool({
+    connect: () => Promise.resolve({
+      query(text, values) {
+        seen.push({ text: String(text), values });
+        return Promise.resolve({ rows: [] });
+      },
+      release() {},
+    }),
+  });
+
+  await withTransaction(async (tx) => {
+    await tx`UPDATE t SET a = ${1} WHERE id = ${2}`;
+  });
+
+  const statement = seen.find((q) => /UPDATE/.test(q.text));
+  assert.equal(statement.text, 'UPDATE t SET a = $1 WHERE id = $2');
+  assert.deepEqual(statement.values, [1, 2]);
+});

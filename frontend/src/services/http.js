@@ -36,7 +36,11 @@ export async function request(path, options = {}) {
   try {
     response = await apiFetch(path, { ...options, headers });
     text = await response.text();
-  } catch {
+  } catch (caught) {
+    // A failure the fetch layer already identified (a refused CSRF token, say)
+    // carries its own code and message and is worth more than the generic copy
+    // below. Only a genuinely unrecognised throw is "the request never landed".
+    if (caught?.code) throw caught;
     throw networkError();
   }
 

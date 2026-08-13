@@ -5,6 +5,7 @@ import NightScreen from '../components/study/NightScreen.jsx';
 import Button from '../components/ui/Button.jsx';
 import CatCircle from '../components/ui/CatCircle.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import { COINS_PER_MINUTE } from '../components/units.js';
 import { useBrainrotDoctor } from '../hooks/useBrainrotDoctor.js';
 import { studyService } from '../services/index.js';
 
@@ -162,13 +163,26 @@ export default function FocusSession() {
       setReward({ error: 'This session was never registered, so it can’t be credited.' });
       return;
     }
+    let result;
     try {
-      const result = await studyService.complete({ sessionKey: sessionKeyRef.current });
-      await refresh();
-      setReward({ coins: result.coins, gained: duration * 4, questCompleted: result.questCompleted ?? null });
+      result = await studyService.complete({ sessionKey: sessionKeyRef.current });
     } catch (caught) {
       setReward({ error: caught.message });
+      return;
     }
+    // Settle the reward from the response before anything else can fail. The
+    // credit is already committed server-side by the time /complete answers —
+    // coins, the sessions row and the status flip all land in one transaction —
+    // so a shell refresh that trips afterwards must not be reported as "couldn't
+    // record your session". It used to share this try/catch, and there is no
+    // retry from that screen: the player was told they had lost coins they had
+    // in fact been paid, and re-running the session earns nothing extra.
+    setReward({
+      coins: result.coins,
+      gained: duration * COINS_PER_MINUTE,
+      questCompleted: result.questCompleted ?? null,
+    });
+    refresh().catch(() => {});
   }, [duration, refresh, monitored, onCountdownZero]);
 
   useEffect(() => {
@@ -399,7 +413,7 @@ export default function FocusSession() {
         {formatTime(remaining)}
       </p>
       <p className="mt-2 text-[17px] font-bold text-night-muted">
-        until you earn <span className="font-extrabold text-gold">{duration * 4} coins</span>
+        until you earn <span className="font-extrabold text-gold">{duration * COINS_PER_MINUTE} coins</span>
       </p>
 
       <div className="mt-9 h-4 w-[520px] overflow-hidden rounded-full bg-[rgba(246,231,204,.14)]">

@@ -43,14 +43,15 @@ export async function getTodayQuest(query, userId, now = new Date()) {
   };
 }
 
-// Count this member's sessions that fall on the given SGT date. sessions.created_at
-// is TIMESTAMP (UTC wall-clock); convert to SGT before taking the date.
+// Count this member's sessions that fall on the given SGT date. `created_at` is
+// TIMESTAMPTZ (migration 012), so one conversion takes the instant straight to
+// the Singapore calendar day the quest is keyed on.
 async function countSessionsToday(query, memberId, sgtDate) {
   const rows = await query`
     SELECT COUNT(*)::int AS c
     FROM sessions
     WHERE realm_member_id = ${memberId}
-      AND (created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Singapore')::date = ${sgtDate}::date
+      AND (created_at AT TIME ZONE 'Asia/Singapore')::date = ${sgtDate}::date
   `;
   return rows[0]?.c ?? 0;
 }

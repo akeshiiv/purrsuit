@@ -266,8 +266,9 @@ async function currentRealmSeasonRow(query, realmId, { lock = false } = {}) {
             winner_user.name AS winner_name
      FROM realms r
      JOIN seasons s ON s.id = r.current_season_id
-     LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-     LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+     LEFT JOIN season_results winner_result
+            ON winner_result.season_id = s.id AND winner_result.rank = 1
+     LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
      WHERE r.id = $1${lockSql}`,
     [realmId],
   );
@@ -295,8 +296,9 @@ async function dashboardPayload(userId, realmId) {
     FROM realms r
     JOIN seasons s ON s.id = r.current_season_id
     JOIN realm_members me ON me.realm_id = r.id AND me.user_id = ${userId}
-    LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-    LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+    LEFT JOIN season_results winner_result
+           ON winner_result.season_id = s.id AND winner_result.rank = 1
+    LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
     WHERE r.id = ${realmId}
   `;
   const row = rows[0];
@@ -317,31 +319,33 @@ async function dashboardPayload(userId, realmId) {
   };
 }
 
-async function territoryLeader(tx, realmId, seasonId) {
+// The champion, read back out of the standings snapshot that was just written.
+// Deriving it from the snapshot rather than from a second, separately-ordered
+// query is the point: the old `territoryLeader` broke ties on join order while
+// `season_results` breaks them on battles won, so on any territory tie the
+// headline crowned one player and the table printed underneath it crowned
+// another — on the same card.
+async function snapshotChampion(tx, realmId, seasonId) {
   const rows = await tx`
-    SELECT rm.id AS member_id,
+    SELECT sr.user_id,
            u.name AS winner_name,
-           COUNT(c.id)::int AS territories
-    FROM realm_members rm
-    JOIN users u ON u.id = rm.user_id
-    LEFT JOIN cells c ON c.owner_member_id = rm.id AND c.season_id = ${seasonId}
-    WHERE rm.realm_id = ${realmId}
-    GROUP BY rm.id, u.name, rm.joined_at
-    ORDER BY territories DESC, rm.joined_at ASC, rm.id ASC
-    LIMIT 1
+           rm.id AS member_id
+    FROM season_results sr
+    JOIN users u ON u.id = sr.user_id
+    LEFT JOIN realm_members rm ON rm.user_id = sr.user_id AND rm.realm_id = ${realmId}
+    WHERE sr.season_id = ${seasonId} AND sr.rank = 1
   `;
   return rows[0] ?? null;
 }
 
 async function rollCurrentSeason(tx, current, now) {
-  const winner = await territoryLeader(tx, current.realm_id, current.season_id);
-  const winnerMemberId = winner?.member_id ?? null;
-  const winnerName = winner?.winner_name ?? null;
+  // Claim the rollover first. `status = 'active'` is the idempotency guard: a
+  // second transaction that reaches here finds nothing to end and backs out
+  // below, so the snapshot and the board reset happen exactly once.
   const endedRows = await tx`
     UPDATE seasons
     SET status = 'ended',
         ended_at = ${now},
-        winner_member_id = ${winnerMemberId},
         state_version = state_version + 1
     WHERE id = ${current.season_id} AND status = 'active'
     RETURNING id, season_number, status, started_at, ends_at, state_version
@@ -393,6 +397,21 @@ async function rollCurrentSeason(tx, current, now) {
     ON CONFLICT (season_id, user_id) DO NOTHING
   `;
 
+  // Crown from the snapshot that was just written, so the headline and the table
+  // under it can never disagree. `winner_member_id` is kept in step for anything
+  // that still reads it, but the name displayed to players is resolved through
+  // `season_results` (see the winner joins on the read queries): that column is
+  // an FK to realm_members declared ON DELETE SET NULL, so a champion who later
+  // leaves or is kicked would otherwise erase their own name from every season
+  // they won, leaving "Nobody claimed this season" above a table still showing
+  // them at rank 1.
+  const champion = await snapshotChampion(tx, current.realm_id, current.season_id);
+  await tx`
+    UPDATE seasons
+    SET winner_member_id = ${champion?.member_id ?? null}
+    WHERE id = ${current.season_id}
+  `;
+
   await tx`DELETE FROM cells WHERE season_id = ${current.season_id}`;
 
   const { cells, assignments } = assignMembersToGeneratedHomes({
@@ -404,16 +423,29 @@ async function rollCurrentSeason(tx, current, now) {
   });
   await insertCells(tx, { seasonId: newSeason.id, realmId: current.realm_id, cells });
 
+  // Reset the whole realm's economy in one statement, independently of home
+  // assignment. The two used to share a loop over `assignments`, which quietly
+  // made "your season resets" conditional on "you were given a slot": a member
+  // the assignment skipped kept their coins, units and battle record into the
+  // next season. Home coordinates are cleared here and re-set below, so a member
+  // without a slot is left homeless rather than pointing at last season's cell.
+  await tx`
+    UPDATE realm_members
+    SET coins = 0,
+        units_a = 0,
+        units_b = 0,
+        units_c = 0,
+        seconds_studied = 0,
+        battles_won = 0,
+        home_x = NULL,
+        home_y = NULL
+    WHERE realm_id = ${current.realm_id}
+  `;
+
   for (const assignment of assignments) {
     await tx`
       UPDATE realm_members
-      SET coins = 0,
-          units_a = 0,
-          units_b = 0,
-          units_c = 0,
-          seconds_studied = 0,
-          battles_won = 0,
-          home_x = ${assignment.x},
+      SET home_x = ${assignment.x},
           home_y = ${assignment.y}
       WHERE id = ${assignment.memberId}
     `;
@@ -426,7 +458,7 @@ async function rollCurrentSeason(tx, current, now) {
   `;
 
   return {
-    endedSeason: seasonPayload({ ...endedRows[0], winner_name: winnerName }),
+    endedSeason: seasonPayload({ ...endedRows[0], winner_name: champion?.winner_name ?? null }),
     newSeason: seasonPayload(newSeason),
   };
 }
@@ -467,7 +499,36 @@ export async function memberRealmSummary(userId) {
   return rows[0] ? realmSummary(rows[0], rows[0].role) : null;
 }
 
+// True when the realm's season has run out and a rollover is due. Deliberately
+// unlocked and outside any transaction — see ensureSeasonFresh.
+async function rolloverLooksDue(realmId) {
+  const rows = await sql`
+    SELECT s.status, s.ends_at
+    FROM realms r
+    JOIN seasons s ON s.id = r.current_season_id
+    WHERE r.id = ${realmId}
+  `;
+  const season = rows[0];
+  if (!season) return false;
+  return season.status === 'active' && new Date() >= new Date(season.ends_at);
+}
+
 export async function ensureSeasonFresh(realmId) {
+  // Probe before locking. Nothing runs on a timer, so a season only needs
+  // rolling once per season_length_days — 7 days at the minimum — but this is
+  // called from every read path in the app, and the map (2.5s), dashboard (4s)
+  // and season-status (5s, app-wide) pollers reach it constantly for every
+  // member of the realm. Opening a transaction and taking `FOR UPDATE OF r, s`
+  // before even asking whether the season had expired serialised all of that
+  // read traffic on the same two exclusive row locks, each holding a pooled
+  // connection for its round trip, in direct contention with the attack/defend/
+  // buy transactions that genuinely need those locks.
+  //
+  // Losing the race here is harmless: the authoritative re-check below runs
+  // under the lock, and the rollover's own `status = 'active'` guard is what
+  // makes it happen exactly once regardless of how many callers arrive together.
+  if (!(await rolloverLooksDue(realmId))) return null;
+
   return withTransaction(async (tx) => {
     const current = await currentRealmSeasonRow(tx, realmId, { lock: true });
     if (!current) return null;
@@ -634,9 +695,21 @@ export async function joinRealm(userId, input = {}) {
       throw realmError(409, 'REALM_FULL', 'This realm is full.');
     }
 
+    // Join already acknowledged: seed `acked_season_id` with the realm's most
+    // recently ended season. Left NULL, seasonStatus compares Number(null) → 0
+    // against a real season id, never matches, and reports needsAck=true — so a
+    // player who has just joined is met by a full-screen victory/defeat overlay
+    // for a season they never played, listing strangers. Someone arriving now
+    // has nothing to be shown the end of.
     const memberRows = await tx`
-      INSERT INTO realm_members (realm_id, user_id, role, home_x, home_y)
-      VALUES (${row.id}, ${userId}, 'member', ${home.x}, ${home.y})
+      INSERT INTO realm_members (realm_id, user_id, role, home_x, home_y, acked_season_id)
+      VALUES (
+        ${row.id}, ${userId}, 'member', ${home.x}, ${home.y},
+        (SELECT s.id FROM seasons s
+          WHERE s.realm_id = ${row.id} AND s.status = 'ended'
+          ORDER BY s.season_number DESC
+          LIMIT 1)
+      )
       RETURNING id
     `;
     await assignHomeCell(tx, {
@@ -769,9 +842,13 @@ export async function endSeasonNow(userId, realmId) {
     if (!admin) {
       throw realmError(403, 'NOT_ADMIN', 'Only the realm admin can do that.');
     }
+    // Admin already established, so there is nothing left to withhold: a realm
+    // parked with no current season is a different failure from "you are not the
+    // admin", and reporting it as NOT_ADMIN told the one person who could act
+    // that they had no permission to.
     const current = await currentRealmSeasonRow(tx, realmId, { lock: true });
     if (!current) {
-      throw realmError(403, 'NOT_ADMIN', 'Only the realm admin can do that.');
+      throw realmError(409, 'NOT_IN_ACTIVE_SEASON', 'This realm has no active season to end.');
     }
     const { endedSeason } = await rollCurrentSeason(tx, current, new Date());
     return { season: endedSeason };

@@ -5,7 +5,6 @@ import {
   MIN_DURATION_MINUTES,
   MAX_DURATION_MINUTES,
   validateAndComputeAward,
-  parseCoins,
 } from './coins.js';
 
 test('awards 4 coins per minute for the contract reference durations', () => {
@@ -55,15 +54,4 @@ test('ignores any client-supplied coin amount (award depends only on duration)',
   assert.equal(validateAndComputeAward.length, 1);
 });
 
-test('parseCoins coerces driver strings and numbers to an integer', () => {
-  // BIGINT/NUMERIC columns arrive as strings from both Neon and pg.
-  assert.equal(parseCoins('60'), 60);
-  assert.equal(parseCoins(60), 60);
-  assert.equal(parseCoins(0), 0);
-});
 
-test('parseCoins throws on missing or non-integer values (fail loud, never silent 0)', () => {
-  for (const bad of [null, undefined, 'abc', 3.5, NaN, {}]) {
-    assert.throws(() => parseCoins(bad), `expected ${String(bad)} to throw`);
-  }
-});

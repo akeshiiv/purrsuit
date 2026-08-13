@@ -118,6 +118,19 @@ export default function RealmSelect() {
     return () => { active = false; };
   }, []);
 
+  // `logout` now rejects when the server did not actually clear the session
+  // cookie, rather than navigating away as though it had. Surfacing that is the
+  // point: silently staying signed in is the failure worth telling someone
+  // about, especially on a shared machine.
+  async function handleSignOut() {
+    setError('');
+    try {
+      await logout();
+    } catch (caught) {
+      setError(caught.message);
+    }
+  }
+
   // The header pill needs a name and avatar even for a user in no realm, where
   // `getCurrent()` returns `{ realm: null }` and there is no `me`. A failure
   // here costs only the greeting, so it must not block or blank the page.
@@ -195,7 +208,7 @@ export default function RealmSelect() {
           <span aria-hidden="true" className="block h-[18px] w-[2px] bg-warm" />
           <button
             className="cursor-pointer text-[12.5px] font-extrabold text-ink-muted-soft hover:text-[#8a5a22]"
-            onClick={logout}
+            onClick={handleSignOut}
             type="button"
           >
             Sign out

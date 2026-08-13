@@ -1,5 +1,6 @@
 // SSOT: Map UI/UX + Game logic.
-// NO REACT/DOM IMPORTS!
+// NO REACT/DOM IMPORTS! (units.js is plain data and imports nothing.)
+import { UNIT_META, UNIT_ORDER } from '../units.js';
 
 export const PALETTE = {
   neutralLand: '#E9E1D4',
@@ -16,18 +17,15 @@ export const PALETTE = {
 // legible while the identity colour still reads at a glance.
 export const OWNED_TINT = 0.52;
 
-export const UNIT_META = {
-  A: { label: 'MasterGooner', glyph: '😼', key: 'a' },
-  B: { label: 'AlphaSigma67', glyph: '😽', key: 'b' },
-  C: { label: 'Mr.Chonk', glyph: '😻', key: 'c' },
-};
-
-export const UNIT_TYPES = ['A', 'B', 'C'];
-
-const BEATS = { A: 'B', B: 'C', C: 'A' };
-
+// The unit table and the rock-paper-scissors cycle live in one place
+// (components/units.js) and are re-derived here rather than restated. This file
+// used to carry its own `UNIT_META` — with different keys AND different values
+// (`label`/`glyph` against `name`/`beats`) — plus a second copy of the cycle as
+// a private BEATS table. The copy here was imported by nobody: every screen that
+// renders a unit already reads units.js, so the two had quietly drifted into
+// different shapes with nothing to reconcile them.
 export function beats(attacker, defender) {
-  return BEATS[attacker] === defender;
+  return UNIT_META[attacker]?.beats === defender;
 }
 
 export function cellKey(cell) {
@@ -99,5 +97,5 @@ export function dominantUnit(cells, memberId) {
     if (cell.ownerMemberId !== memberId) continue;
     if (cell.unitType && tally[cell.unitType] !== undefined) tally[cell.unitType] += 1;
   }
-  return UNIT_TYPES.reduce((best, type) => (tally[type] > tally[best] ? type : best), 'A');
+  return UNIT_ORDER.reduce((best, type) => (tally[type] > tally[best] ? type : best), 'A');
 }

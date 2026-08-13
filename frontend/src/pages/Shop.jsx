@@ -48,19 +48,34 @@ export default function Shop() {
     setNotice('');
     setQuestNotice('');
     setBuying(unitType);
+    let result;
     try {
-      const result = await shopService.buy({ unitType });
-      setInventory(await shopService.getInventory());
-      await refresh();
-      setNotice(`Recruited ${UNIT_META[unitType].name}.`);
-      if (result.questCompleted) {
-        setQuestNotice(`Quest complete! +${result.questCompleted.reward} coins · ${result.questCompleted.title}`);
-      }
+      result = await shopService.buy({ unitType });
     } catch (caught) {
       setError(caught.message);
+      setBuying(null);
+      return;
     } finally {
       setBuying(null);
     }
+
+    // Apply the purchase from its own response before the follow-up reads. The
+    // POST already debited the coins server-side, but all three round trips used
+    // to share one catch, so a flaky GET /shop/inventory left the coin pill, the
+    // "n/6 cats housed" chip and every owned count showing the PRE-purchase
+    // numbers under a red error band — indistinguishable from a purchase that
+    // never happened, with the Recruit button re-enabled. The obvious next move
+    // was to click it again and buy a second cat.
+    const { a, b, c } = result.units;
+    setInventory({ coins: result.coins, units: result.units, total: a + b + c, actions: result.actions });
+    setNotice(`Recruited ${UNIT_META[unitType].name}.`);
+    if (result.questCompleted) {
+      setQuestNotice(`Quest complete! +${result.questCompleted.reward} coins · ${result.questCompleted.title}`);
+    }
+
+    // Best-effort reconciliation. Nothing on this screen depends on it now.
+    shopService.getInventory().then(setInventory).catch(() => {});
+    refresh().catch(() => {});
   }
 
   if (!inventory) {

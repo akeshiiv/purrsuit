@@ -52,3 +52,38 @@ test('a patch that omits timeZone leaves the stored zone untouched', async () =>
   assert.equal(profile.name, 'Tung Tung Sahur');
   assert.equal(profile.timeZone, 'America/Los_Angeles');
 });
+
+// Contract parity: the mock used to validate only timeZone and hasOnboarded, so
+// values the deployed API rejects saved cleanly under VITE_USE_MOCK=true — the
+// mode the README recommends for all UI work. AccountSettings sends name, colour
+// and avatarUrl on every save from unvalidated free-text inputs.
+test('mock update enforces the same name, colour and avatar rules as the API', async () => {
+  await assert.rejects(
+    () => mockProfile.update({ name: '   ' }),
+    error => error.code === 'INVALID_NAME',
+  );
+  await assert.rejects(
+    () => mockProfile.update({ name: 'x'.repeat(33) }),
+    error => error.code === 'INVALID_NAME',
+  );
+  await assert.rejects(
+    () => mockProfile.update({ colour: 'blue' }),
+    error => error.code === 'INVALID_COLOUR',
+  );
+  await assert.rejects(
+    () => mockProfile.update({ avatarUrl: 'me.png' }),
+    error => error.code === 'INVALID_AVATAR',
+  );
+  // The exact value AccountSettings used to send for an account with no photo.
+  await assert.rejects(
+    () => mockProfile.update({ avatarUrl: '' }),
+    error => error.code === 'INVALID_AVATAR',
+  );
+});
+
+test('mock update still accepts a valid patch', async () => {
+  const updated = await mockProfile.update({
+    name: 'Jo', colour: '#AABBCC', avatarUrl: 'https://example.com/a.png',
+  });
+  assert.equal(updated.name, 'Jo');
+});

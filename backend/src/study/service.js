@@ -9,9 +9,25 @@ import { normalizeTz, buildStatBlock, computeStreak, buildLast7Days } from './st
 const SECONDS_PER_MINUTE = 60;
 
 // A countdown that ran on the client can hit zero a moment before the server
-// agrees: clocks drift and the final tick rounds. This is how much of that slack
-// a claim is allowed, and the only slack it gets.
-export const START_GRACE_SECONDS = 60;
+// agrees. This is how much of that slack a claim is allowed, and the only slack
+// it gets.
+//
+// Sized against what it actually has to cover, which is one thing: the case
+// where the /start request was slower than the /complete request. The client
+// anchors its countdown BEFORE the server stamps started_at, so the server is
+// already running behind by the /start latency and only the difference between
+// the two round trips can put a claim early. Clock-rate drift contributes under
+// a second even across a 120-minute session, and the final tick rounds by less
+// than one. 15s clears a cold serverless /start with room to spare.
+//
+// It was 60s, which is a fixed discount applied to a variable reward: the award
+// is durationMinutes * 4, so on the 5-minute minimum the grace was 20% of the
+// session and paid 5 coins/minute against the intended 4. Starting, sleeping
+// 240s and claiming on a loop beat honest study by 25% indefinitely. At 15s the
+// worst case is 4.21 coins/minute, and the shape stays right — the problem the
+// grace exists for is fixed-size, so scaling it with duration would only make it
+// too tight on the short sessions that need it most.
+export const START_GRACE_SECONDS = 15;
 
 // How long a finished session stays claimable. Long enough to survive a dropped
 // response, a backgrounded tab or a walk to the kettle; short enough that a row
@@ -364,7 +380,7 @@ export async function getStudyStats(userId, tzInput) {
         COALESCE(SUM(duration), 0)::int AS total_seconds,
         COUNT(*)::int AS session_count,
         COALESCE(SUM(coins_earned), 0)::int AS total_coins,
-        COUNT(DISTINCT (created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date)::int AS active_days
+        COUNT(DISTINCT (created_at AT TIME ZONE ${tz})::date)::int AS active_days
       FROM sessions
       WHERE user_id = ${userId}
     `,
@@ -374,7 +390,7 @@ export async function getStudyStats(userId, tzInput) {
     // costs no scan and no round trip, and the two cannot disagree about a
     // session that lands mid-request the way two separate reads could.
     sql`
-      SELECT to_char((created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS day,
+      SELECT to_char((created_at AT TIME ZONE ${tz})::date, 'YYYY-MM-DD') AS day,
              COALESCE(SUM(duration), 0)::int AS seconds
       FROM sessions
       WHERE user_id = ${userId}
@@ -389,7 +405,7 @@ export async function getStudyStats(userId, tzInput) {
           COALESCE(SUM(duration), 0)::int AS total_seconds,
           COUNT(*)::int AS session_count,
           COALESCE(SUM(coins_earned), 0)::int AS total_coins,
-          COUNT(DISTINCT (created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz})::date)::int AS active_days
+          COUNT(DISTINCT (created_at AT TIME ZONE ${tz})::date)::int AS active_days
         FROM sessions
         WHERE user_id = ${userId} AND season_id = ${seasonId}
       `,

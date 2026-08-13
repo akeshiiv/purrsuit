@@ -1,5 +1,6 @@
 import { actionsFor, advanceMockQuest, bumpVersion, clone, mockError, state } from './state.js';
 import { DISTRACTION_REASONS } from '../../brainrotDoctor/contract.js';
+import { COINS_PER_MINUTE } from '../../components/units.js';
 
 // Mirrors the server constants: the grace absorbs clock skew and countdown
 // rounding, the claim window bounds how long a finished session stays cashable.
@@ -101,13 +102,13 @@ export async function complete(input = {}) {
   }
 
   const minutes = session.durationMinutes;
-  state.me.coins += minutes * 4;
+  state.me.coins += minutes * COINS_PER_MINUTE;
   state.me.secondsStudied += minutes * 60;
   bumpVersion();
 
   session.status = 'completed';
   session.completedAt = now;
-  session.coinsAwarded = minutes * 4;
+  session.coinsAwarded = minutes * COINS_PER_MINUTE;
 
   const quest = advanceMockQuest('study.complete');
   return clone({

@@ -276,11 +276,13 @@ begins; the `sessionKey` it returns is the only handle to the session.
 ```json
 { "sessionKey": "3f1c9d2e-4b7a-4c11-9d38-6a2e5c7b8091", "durationMinutes": 25,
   "startedAt": "2026-07-31T10:00:00.000Z",
-  "eligibleAt": "2026-07-31T10:24:00.000Z",
-  "expiresAt":  "2026-07-31T10:39:00.000Z" }
+  "eligibleAt": "2026-07-31T10:24:45.000Z",
+  "expiresAt":  "2026-07-31T10:39:45.000Z" }
 ```
-- `eligibleAt` = `startedAt` + duration − 60 s of grace (client clock skew and
-  countdown rounding). Claiming before it fails.
+- `eligibleAt` = `startedAt` + duration − 15 s of grace. The grace covers only the
+  case where the `/start` round trip was slower than the `/complete` one; the client
+  anchors its countdown before the server stamps `startedAt`, so the server already
+  runs behind by the `/start` latency. Claiming before it fails.
 - `expiresAt` = `eligibleAt` + a 15-minute claim window. Claiming after it fails.
 
 A user has **one** live session at a time: starting a session abandons whatever

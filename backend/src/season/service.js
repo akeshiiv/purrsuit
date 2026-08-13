@@ -56,8 +56,9 @@ async function currentSeasonRow(realmId) {
            winner_user.name AS winner_name
     FROM realms r
     JOIN seasons s ON s.id = r.current_season_id
-    LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-    LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+    LEFT JOIN season_results winner_result
+           ON winner_result.season_id = s.id AND winner_result.rank = 1
+    LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
     WHERE r.id = ${realmId}
   `;
   return rows[0] ?? null;
@@ -112,9 +113,9 @@ export async function leaderboard(userId, { since } = {}) {
   // is not the same span of hours as yesterday in Chicago. One shared date would
   // quietly hand or withhold a day from everyone in the wrong half of the world.
   //
-  // `sessions.created_at` is a bare TIMESTAMP holding UTC wall time, so it has to
-  // be labelled UTC before it can be converted — the same
-  // `AT TIME ZONE 'UTC' AT TIME ZONE <zone>` pattern getStudyStats uses.
+  // `sessions.created_at` is TIMESTAMPTZ (migration 012), so a single
+  // `AT TIME ZONE <zone>` takes the stored instant to that member's calendar
+  // day — the same one-step conversion getStudyStats uses.
   //
   // Scope is all-time, matching the streak a player sees on their own stats: a
   // streak is a study habit, not a season score, and zeroing everyone's at each
@@ -122,7 +123,7 @@ export async function leaderboard(userId, { since } = {}) {
   const studyDays = sql`
     SELECT rm.user_id,
            to_char(
-             (s.created_at AT TIME ZONE 'UTC' AT TIME ZONE COALESCE(u.time_zone, 'UTC'))::date,
+             (s.created_at AT TIME ZONE COALESCE(u.time_zone, 'UTC'))::date,
              'YYYY-MM-DD'
            ) AS day,
            to_char(
@@ -154,8 +155,9 @@ async function latestEndedSeasonRow(realmId) {
            s.ends_at,
            winner_user.name AS winner_name
     FROM seasons s
-    LEFT JOIN realm_members winner_member ON winner_member.id = s.winner_member_id
-    LEFT JOIN users winner_user ON winner_user.id = winner_member.user_id
+    LEFT JOIN season_results winner_result
+           ON winner_result.season_id = s.id AND winner_result.rank = 1
+    LEFT JOIN users winner_user ON winner_user.id = winner_result.user_id
     WHERE s.realm_id = ${realmId} AND s.status = 'ended'
     ORDER BY s.season_number DESC
     LIMIT 1

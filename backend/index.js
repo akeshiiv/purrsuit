@@ -5,8 +5,6 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
-import { sql } from './db.js';
-import { authenticate } from './src/middleware.js';
 import passport from './src/passport.js';
 import authRouter from './src/routes/auth.js';
 import realmsRouter from './src/routes/realms.js';
@@ -54,35 +52,26 @@ app.use('/auth', limitAuthRoute, authRouter);
 
 // API ROUTES
 
-// home route
+// Health check. Asserted by both deploy jobs in .github/workflows/deploy.yml
+// against the production alias, so this has to keep answering 200 on GET /.
 app.get('/', (req, res) => {
   res.send('The Purrsuit API is working!!!');
 });
 
-// test route
-app.get('/api/hello', (req, res) => { 
-  res.json({ message: 'Hello from Express!' })
-})
-
-// get current user info
-app.get('/api/me', authenticate, (req, res) => res.json(req.user));
-
+// `/api/hello` (a scaffold test route), `/api/me` and `/api/name` used to live
+// here. All three were removed: nothing in the SPA, the mock layer or the API
+// contract ever called them, and the latter two were second, thinner copies of
+// endpoints that are actually used — /auth/me already answers "who am I", and
+// GET /api/profile returns the name along with the rest of the profile. Two of
+// them were authenticated, so they were live surface that had to be kept correct
+// and secure for no caller. /api/name also read `rows[0].name` unguarded, which
+// turned a deleted user into a 500 reported as "Failed to fetch name".
 app.use('/api', realmsRouter);
 app.use('/api', shopRouter);
 app.use('/api', studyRouter);
 app.use('/api', mapRouter);
 app.use('/api', seasonRouter);
 app.use('/api', profileRouter);
-
-// retrieve user's name
-app.get('/api/name', authenticate, async (req, res) => {
-  try {
-    const rows = await sql`SELECT name FROM users WHERE id = ${req.user.id}`;
-    res.json({ name: rows[0].name });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch name' });
-  }
-});
 
 // Error handler: return a clean 403 for CSRF failures, otherwise a generic 500.
 // eslint-disable-next-line no-unused-vars
