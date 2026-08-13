@@ -81,8 +81,24 @@ function memberRow(overrides = {}) {
 }
 
 test('exposes the grace and claim-window constants the contract fixes', () => {
-  assert.equal(START_GRACE_SECONDS, 60);
+  assert.equal(START_GRACE_SECONDS, 15);
   assert.equal(CLAIM_WINDOW_MINUTES, 15);
+});
+
+// The grace is a fixed discount on a reward that scales with duration, so it is
+// worth the most on the shortest session the economy allows. At 60s it made the
+// 5-minute minimum pay 5 coins/minute against the intended 4 — start, sleep 240s,
+// claim, repeat beat honest study by 25% for as long as you cared to run it.
+test('the grace cannot inflate the shortest session past a few percent', () => {
+  const MIN_MINUTES = 5;
+  const COINS_PER_MINUTE = 4;
+  const eligibleSeconds = MIN_MINUTES * 60 - START_GRACE_SECONDS;
+  const effectiveRate = (MIN_MINUTES * COINS_PER_MINUTE) / (eligibleSeconds / 60);
+
+  assert.ok(
+    effectiveRate <= COINS_PER_MINUTE * 1.1,
+    `a ${MIN_MINUTES}-minute session earns ${effectiveRate.toFixed(2)} coins/min against an intended ${COINS_PER_MINUTE}`,
+  );
 });
 
 test('normalizeSessionKey accepts a uuid and rejects anything else', () => {
@@ -163,9 +179,9 @@ test('openStudySession retires a prior pending session and issues a key', async 
   assert.equal(out.startedAt, '2026-07-31T10:00:00.000Z');
   assert.equal(out.eligibleAt, '2026-07-31T10:24:00.000Z');
   assert.equal(out.expiresAt, '2026-07-31T10:39:00.000Z');
-  // 25 minutes less the 60s grace, and the claim window on top of that.
-  assert.ok(insert.values.includes(1440), 'eligibility is the duration minus the grace');
-  assert.ok(insert.values.includes(2340), 'expiry is eligibility plus the claim window');
+  // 25 minutes less the 15s grace, and the claim window on top of that.
+  assert.ok(insert.values.includes(1485), 'eligibility is the duration minus the grace');
+  assert.ok(insert.values.includes(2385), 'expiry is eligibility plus the claim window');
   assert.ok(insert.values.includes(SEASON), 'stamps the season it was started in');
   assert.ok(/now\(\)/.test(insert.text), 'takes every timestamp from the server clock');
 });
