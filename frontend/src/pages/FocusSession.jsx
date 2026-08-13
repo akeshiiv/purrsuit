@@ -5,6 +5,7 @@ import NightScreen from '../components/study/NightScreen.jsx';
 import Button from '../components/ui/Button.jsx';
 import CatCircle from '../components/ui/CatCircle.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import { COINS_PER_MINUTE } from '../components/units.js';
 import { useBrainrotDoctor } from '../hooks/useBrainrotDoctor.js';
 import { studyService } from '../services/index.js';
 
@@ -399,7 +400,7 @@ export default function FocusSession() {
         {formatTime(remaining)}
       </p>
       <p className="mt-2 text-[17px] font-bold text-night-muted">
-        until you earn <span className="font-extrabold text-gold">{duration * 4} coins</span>
+        until you earn <span className="font-extrabold text-gold">{duration * COINS_PER_MINUTE} coins</span>
       </p>
 
       <div className="mt-9 h-4 w-[520px] overflow-hidden rounded-full bg-[rgba(246,231,204,.14)]">

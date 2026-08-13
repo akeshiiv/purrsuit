@@ -6,13 +6,13 @@ import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import CatCircle from '../components/ui/CatCircle.jsx';
 import CircularSlider from '../components/ui/CircularSlider.jsx';
+import { COINS_PER_MINUTE } from '../components/units.js';
 import CoinPill from '../components/ui/CoinPill.jsx';
 
 const PRESETS = [25, 50, 60];
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 120;
 const STEP_MINUTES = 5;
-const COINS_PER_MINUTE = 4;
 
 function PresetPill({ active, minutes, onSelect }) {
   return (
