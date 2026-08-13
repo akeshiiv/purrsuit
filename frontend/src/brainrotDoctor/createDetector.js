@@ -2,11 +2,11 @@ import { createMockDetector } from './engines/mock.js';
 import { createPromptApiDetector } from './engines/promptApi.js';
 import { createTransformersDetector } from './engines/transformers.js';
 
-const USE_MOCK = import.meta.env.VITE_BRAINROT_DOCTOR_MOCK === 'true';
-
-// Builds the detector for a resolved engine. Mock overrides everything for dev.
+// Builds the detector for a resolved engine. The dev mock is now one of those
+// engines rather than a flag read again here — selectEngine owns that decision,
+// because it runs first and the caller bails on 'none' before reaching this.
 export function createDetector({ engine, model, dtype, onProgress } = {}) {
-  if (USE_MOCK) {
+  if (engine === 'mock') {
     const d = createMockDetector();
     return { ready: Promise.resolve(), analyzeFrame: d.analyzeFrame, dispose() {} };
   }

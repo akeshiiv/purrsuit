@@ -51,3 +51,23 @@ test('selects none when the gpu exists but the device is too small for any model
   assert.equal(r.engine, 'none');
   assert.equal(r.model, null);
 });
+
+// Regression: this flag used to be read inside createDetector, but the hook
+// bails on `engine: 'none'` before createDetector is ever reached — so on a
+// machine with no WebGPU and no Prompt API, exactly the machine the flag exists
+// to unblock, it had no effect at all.
+test('the dev mock flag wins on a machine with no engine of its own', async () => {
+  const bareEnv = { LanguageModel: undefined, gpu: undefined, deviceMemory: undefined };
+
+  assert.equal((await selectEngine(bareEnv)).engine, 'none', 'without the flag: no engine');
+  assert.equal(
+    (await selectEngine({ ...bareEnv, useMock: true })).engine,
+    'mock',
+    'with the flag: the mock detector, even with no GPU and no Prompt API',
+  );
+});
+
+test('the dev mock flag also overrides an engine that would otherwise be picked', async () => {
+  const r = await selectEngine({ ...promptApiEnv, useMock: true });
+  assert.equal(r.engine, 'mock');
+});
