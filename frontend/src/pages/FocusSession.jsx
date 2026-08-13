@@ -163,13 +163,26 @@ export default function FocusSession() {
       setReward({ error: 'This session was never registered, so it can’t be credited.' });
       return;
     }
+    let result;
     try {
-      const result = await studyService.complete({ sessionKey: sessionKeyRef.current });
-      await refresh();
-      setReward({ coins: result.coins, gained: duration * 4, questCompleted: result.questCompleted ?? null });
+      result = await studyService.complete({ sessionKey: sessionKeyRef.current });
     } catch (caught) {
       setReward({ error: caught.message });
+      return;
     }
+    // Settle the reward from the response before anything else can fail. The
+    // credit is already committed server-side by the time /complete answers —
+    // coins, the sessions row and the status flip all land in one transaction —
+    // so a shell refresh that trips afterwards must not be reported as "couldn't
+    // record your session". It used to share this try/catch, and there is no
+    // retry from that screen: the player was told they had lost coins they had
+    // in fact been paid, and re-running the session earns nothing extra.
+    setReward({
+      coins: result.coins,
+      gained: duration * COINS_PER_MINUTE,
+      questCompleted: result.questCompleted ?? null,
+    });
+    refresh().catch(() => {});
   }, [duration, refresh, monitored, onCountdownZero]);
 
   useEffect(() => {
