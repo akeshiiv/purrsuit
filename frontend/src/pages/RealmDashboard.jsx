@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import Screen from '../components/layout/Screen.jsx';
 import Button from '../components/ui/Button.jsx';
 import CatCircle from '../components/ui/CatCircle.jsx';
 import CoinPill from '../components/ui/CoinPill.jsx';
 import DailyQuestCard from '../components/ui/DailyQuestCard.jsx';
-import DeployModal from '../components/map/DeployModal.jsx';
 import MapBoard from '../components/map/MapBoard.jsx';
 import PlayerAvatar from '../components/map/PlayerAvatar.jsx';
 import StatsSummary from '../components/StatsSummary.jsx';
@@ -13,11 +12,13 @@ import { useGame } from '../components/GameContext.jsx';
 import { useMapPolling } from '../hooks/useMapPolling.js';
 import { useMidnightRefresh } from '../hooks/useMidnightRefresh.js';
 import { UNIT_META, UNIT_ORDER, beatsLabel } from '../components/units.js';
-import { attackTargets, cellKey, dominantUnit, standings } from '../components/map/mapModel.js';
+import { dominantUnit, standings } from '../components/map/mapModel.js';
 import { formatCountdown } from '../utils/time.js';
 
-const IN_RANGE_HINT = 'Glowing tiles are in range. Tap one to attack.';
-const NO_RANGE_HINT = 'Nothing in range. Cats only reach cells next to your own.';
+// Home shows the board, it doesn't play it: no target glow, no click targets.
+// Range only matters once you're actually attacking, and on a full board the
+// glow would swamp the thing you came here to read — who holds what.
+const BOARD_CAPTION = 'Your realm so far. Hit Attack to take a turn.';
 
 function heldOf(units, type) {
   return units?.[UNIT_META[type].key] ?? 0;
@@ -47,12 +48,8 @@ function RosterRow({ type, count }) {
 export default function RealmDashboard() {
   const { realm, season, me: gameMe, dailyQuest, refresh } = useGame();
   useMidnightRefresh(refresh);
-  const { map, error, refresh: refreshMap } = useMapPolling(4000);
+  const { map, error } = useMapPolling(4000);
   const navigate = useNavigate();
-
-  const [selected, setSelected] = useState(null); // { cell, mode }
-  const [hint, setHint] = useState('');
-  const [questNotice, setQuestNotice] = useState('');
 
   const board = map?.me ? map : null;
   const me = board?.me ?? gameMe;
@@ -61,39 +58,11 @@ export default function RealmDashboard() {
     () => (board ? standings(board.cells, board.members) : []),
     [board],
   );
-  const targets = useMemo(
-    () => (board ? attackTargets(board.cells, me.id) : new Set()),
-    [board, me.id],
-  );
-
   const featured = featuredUnit(me?.units);
   const countdown = formatCountdown(season?.endsAt);
   const seasonChip = season?.status === 'ended' || countdown === 'Season ended'
     ? `Season ${season?.id} · ended`
     : `Season ${season?.id} · ends in ${countdown}`;
-  // The status line, rewritten after every resolution and otherwise describing
-  // what the board is offering right now.
-  const hintLine = hint || (!board ? '' : targets.size > 0 ? IN_RANGE_HINT : NO_RANGE_HINT);
-
-  function handleCellClick(cell) {
-    setQuestNotice('');
-    const mine = cell.ownerMemberId === me.id;
-    if (mine && cell.unitType) {
-      setSelected({ cell, mode: 'defend' });
-    } else if (targets.has(cellKey(cell))) {
-      setSelected({ cell, mode: 'attack' });
-    }
-  }
-
-  async function handleDeployed(deploy, intent) {
-    setSelected(null);
-    setHint(describe(deploy, intent));
-    setQuestNotice(deploy?.questCompleted
-      ? `Quest complete! +${deploy.questCompleted.reward} coins · ${deploy.questCompleted.title}`
-      : '');
-    await refreshMap();
-    await refresh();
-  }
 
   return (
     <Screen
@@ -146,11 +115,7 @@ export default function RealmDashboard() {
               <MapBoard
                 cellSize={60}
                 cells={board.cells}
-                highlightKeys={targets}
-                interactive
                 meId={me.id}
-                onCellClick={handleCellClick}
-                selectedKey={selected ? cellKey(selected.cell) : null}
                 size={board.size}
               />
             ) : (
@@ -158,10 +123,9 @@ export default function RealmDashboard() {
                 <p className="font-display text-[19px] font-extrabold text-ink-muted">Loading realm…</p>
               </div>
             )}
-            <p className="mt-[14px] text-[12.5px] font-extrabold text-ink-muted">{hintLine}</p>
-            {questNotice && (
-              <p className="mt-1 text-[12.5px] font-extrabold text-[#C9862B]">{questNotice}</p>
-            )}
+            <p className="mt-[14px] text-[12.5px] font-extrabold text-ink-muted">
+              {board ? BOARD_CAPTION : ''}
+            </p>
             {error && (
               <p className="mt-1 text-[12.5px] font-extrabold text-danger-ink" role="alert">
                 Couldn't refresh, retrying...
@@ -210,35 +174,6 @@ export default function RealmDashboard() {
           </div>
         </div>
       </div>
-
-      <DeployModal
-        cell={selected?.cell}
-        key={selected ? `${selected.mode}-${selected.cell.x}-${selected.cell.y}` : 'none'}
-        me={board?.me}
-        mode={selected?.mode}
-        onClose={() => setSelected(null)}
-        onDeployed={handleDeployed}
-        open={Boolean(selected)}
-      />
     </Screen>
   );
-}
-
-// The board's status line, rewritten after every resolution.
-function describe(deploy, intent) {
-  const cell = deploy?.cell;
-  if (!cell || !intent) return '';
-  const at = `${cell.x}, ${cell.y}`;
-  const sent = UNIT_META[intent.unitType]?.name ?? 'Your cat';
-
-  if (intent.mode === 'defend') {
-    return `Reinforced ${at}. ${sent} ×${cell.troopCount} now.`;
-  }
-  if (deploy.result === 'claimed') return `Claimed ${at}. ${sent} holds it now.`;
-  if (deploy.result === 'captured') return `Captured ${at}. ${sent} holds it now.`;
-
-  const defender = UNIT_META[intent.target?.unitType]?.name;
-  return defender
-    ? `Repelled at ${at}. ${sent} doesn't beat ${defender}.`
-    : `Repelled at ${at}. ${sent} couldn't take it.`;
 }
