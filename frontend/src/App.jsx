@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -56,6 +56,11 @@ function RequireRealm({ children, skipOnboardingGate = false }) {
     return data;
   }, []);
 
+  // Held in a ref so the retry button can re-run the load without the effect's
+  // cleanup having torn down the `active` guard of the attempt it replaces.
+  const reloadRef = useRef(null);
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     let active = true;
 
@@ -86,22 +91,38 @@ function RequireRealm({ children, skipOnboardingGate = false }) {
       }
     }
 
+    reloadRef.current = loadShell;
     loadShell();
     return () => {
       active = false;
     };
-  }, []);
+  }, [attempt]);
 
   if (loading) {
     return <Loading label="Loading realm…" />;
   }
 
+  // This gate wraps every authenticated route, so its failure state takes the
+  // whole app down. It used to be terminal — no retry, no button, no navigation,
+  // `[]` deps — so a single timed-out read against a cold backend or a resuming
+  // database parked the player here until they reloaded the page by hand, even
+  // though the backend was answering again a second later. AuthContext already
+  // treats exactly this cold start as worth asking again about, and offers a
+  // "Try again" on SessionUnavailable; the realm/profile pair, hit on the very
+  // same cold start, offered nothing.
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-page p-6">
         <div className="p-card-hero max-w-md p-8 text-center">
           <h1 className="font-display text-[26px] font-extrabold text-ink">Realm unavailable</h1>
           <p className="mt-2 text-[13.5px] text-ink-muted">{error.message}</p>
+          <button
+            className="mt-5 cursor-pointer rounded-full border-3 border-[#C08D45] bg-gold px-6 py-2 font-display text-[15px] font-extrabold text-ink"
+            onClick={() => setAttempt(n => n + 1)}
+            type="button"
+          >
+            Try again
+          </button>
         </div>
       </div>
     );

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Screen from '../components/layout/Screen.jsx';
+import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import WeekChart from '../components/stats/WeekChart.jsx';
 import { studyService } from '../services/index.js';
@@ -60,14 +61,31 @@ export default function Stats() {
   const [error, setError] = useState(null);
   const [scope, setScope] = useState('allTime');
 
+  // `attempt` is what makes the error state recoverable: without it the effect
+  // never re-runs, so a single flaky read left this screen permanently stuck on
+  // "Stats unavailable" with nothing to press — the same dead end RequireRealm
+  // used to have, and for the same reason.
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     let active = true;
-    studyService.getStats(browserTz())
-      .then((data) => { if (active) setStats(data); })
-      .catch((caught) => { if (active) setError(caught); })
-      .finally(() => { if (active) setLoading(false); });
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await studyService.getStats(browserTz());
+        if (active) setStats(data);
+      } catch (caught) {
+        if (active) setError(caught);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    load();
     return () => { active = false; };
-  }, []);
+  }, [attempt]);
 
   const hasSeason = Boolean(stats?.season);
   const block = useMemo(() => {
@@ -91,6 +109,13 @@ export default function Stats() {
         <Card className="max-w-[520px] px-7 py-6">
           <h1 className="font-display text-[26px] font-extrabold text-ink">Stats unavailable</h1>
           <p className="mt-[8px] text-[14px] font-bold text-danger-ink" role="alert">{error.message}</p>
+          <Button
+            className="mt-[18px]"
+            onClick={() => setAttempt(n => n + 1)}
+            variant="blue"
+          >
+            Try again
+          </Button>
         </Card>
       </Screen>
     );
